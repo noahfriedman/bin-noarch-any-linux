@@ -1,0 +1,27 @@
+#!/bin/sh
+# $Id$
+
+ludelibdir=/opt/lude/lib
+ludeincdir=/opt/lude/include
+
+#linkargs="-Wl,-rpath,$ludelibdir"
+
+# GCC 2.8.1 will warn if linker args are specified but not used, and this
+# confuses some autoconf and libtool tests which assume any warning means
+# a test failed.
+for f in ${1+"$@"}; do
+  case "$f" in
+    -[cSE] ) linkargs= ;;
+  esac
+done
+
+case "$0" in
+  */lgcc )    cc=${GCC-/usr/bin/gcc} ;;
+  */l[cg]++ ) cc=${GCXX-/usr/bin/g++} ;;
+esac
+
+exec $cc \
+         -I/usr/X11R6/include -I$ludeincdir \
+         -L/usr/X11R6/lib     -L$ludelibdir \
+         $linkargs \
+     ${1+"$@"}
