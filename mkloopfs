@@ -1,0 +1,21 @@
+#!/bin/sh
+# mkloopfs --- make a loopback filesystem on disk
+
+# $Id$
+
+case $# in
+  3 ) : ;;
+  * )
+    echo "Usage: mkloopfs [name] [fstype] [Kblocks]" 1>&2
+    exit 1
+   ;;
+esac
+
+name=$1
+type=$2
+size=$3
+
+dd if=/dev/zero of="$name" bs=1024 count="$size" \
+  && mkfs -t "$type" "$name"
+
+# eof
