@@ -1,0 +1,7 @@
+#! /bin/sh
+# $Id$
+
+netstat ${1+"$@"} \
+ | sed -n -e '/^Active UNIX/q' \
+          -e 's/[ 	]*$//' \
+          -e p
