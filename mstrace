@@ -1,0 +1,12 @@
+#!/bin/sh
+# $Id$
+
+# Adding these will show an ascii/hex dump of the read/write buffers
+#         -eread=all \
+#         -ewrite=all \
+
+exec strace -fv \
+        -eabbrev=none \
+        -esignal=all \
+        -s16384 \
+        ${1+"$@"}
