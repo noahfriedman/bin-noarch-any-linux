@@ -1,12 +1,16 @@
 #!/bin/sh
-# $Id$
+# $Id: mtrace,v 1.1 1997/06/19 23:13:18 friedman Exp $
 
-# Adding these will show an ascii/hex dump of the read/write buffers
-#         -eread=all \
-#         -ewrite=all \
+case :${HEX+set}:${hex+set}: in
+  *:set:* ) set fnord -e read=all -e write=all ${1+"$@"}; shift ;;
+esac
 
-exec strace -fv \
-        -eabbrev=none \
-        -esignal=all \
-        -s16384 \
+exec strace             \
+        -e abbrev=none  \
+        -e signal=all   \
+        -e trace=all    \
+        -e verbose=all  \
+        -s 65535        \
+        -S name         \
+        -F -f -v -T     \
         ${1+"$@"}
