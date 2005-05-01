@@ -1,0 +1,8 @@
+#!/bin/sh
+# $Id$
+
+while read rpm; do
+  pkg=`expr $rpm : '\(.*\)\.[^.]*\.rpm'`
+  echo "$pkg"
+  rpm --verify "$pkg"
+done < /var/log/rpmpkgs
