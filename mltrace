@@ -1,0 +1,4 @@
+#!/bin/sh
+# $Id$
+
+exec ltrace -C -f -n2 -s 65535 -S -T "$@"
