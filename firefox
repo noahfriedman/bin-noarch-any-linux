@@ -1,0 +1,3 @@
+#!/bin/sh
+# Use the 32-bit version of firefox so that I can use plugins.
+exec linux32 run-next "$0" ${1+"$@"}
