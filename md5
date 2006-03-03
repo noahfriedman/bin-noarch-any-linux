@@ -1,0 +1,13 @@
+#!/bin/sh
+# $Id$
+
+# Emulation of freebsd `md5', which is essentially just
+# the RSA reference implementation.
+
+case $# in
+  0 ) md5sum | sed -e 's/ .*//' ;;
+  * ) md5sum ${1+"$@"} \
+       | sed -e 's/^\([^ 	]*\)[ 	]*\(.*\)/MD5 (\2) = \1/' ;
+esac
+
+# eof
