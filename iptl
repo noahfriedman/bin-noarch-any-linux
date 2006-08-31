@@ -1,0 +1,62 @@
+#!/bin/sh
+# $Id$
+
+iptn=/proc/net/ip_tables_names
+
+main()
+{
+  case ${UID-`id -u`} in
+    0 ) : ;;
+    * ) exec sudo "$0" ${1+"$@"} ;;
+  esac
+
+  case $1 in
+    -a ) table=-a ;;
+    *  ) table=filter
+         if table_p $1; then
+           table=$1
+           shift
+         fi ;;
+  esac
+
+  case $1 in
+    -* ) chain=           ;;
+    *  ) chain=$1 ; shift ;;
+  esac
+
+  case $table in
+    -a ) for tbl in `sort -f $iptn` ; do
+           echo TABLE $tbl:
+           echo
+           ipt $tbl $chain | sed -e 's/^/    /'
+           echo
+         done ;;
+     * ) ipt $table $chain ;;
+  esac
+}
+
+table_p()
+{
+  case $1 in
+    filter | nat | mangle | raw ) return 0 ;;
+    * ) test -e $iptn && grep "^$1\$" $iptn > /dev/null ;;
+  esac
+}
+
+ipt()
+{
+  iptables --table $1     \
+           --list  $2     \
+           --line-numbers \
+           --numeric      \
+           --verbose      \
+   | fmtcols --skip-leading-whitespace  \
+             --num-fields 11            \
+             --ignore-matching '^Chain' \
+             --right-justify 0,1,2      \
+             --output-separator '  '
+}
+
+main ${1+"$@"}
+
+# eof
