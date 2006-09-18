@@ -1,0 +1,30 @@
+#!/bin/sh
+# $Id$
+
+test `id -u` -eq 0 || exec sudo "$0" ${1+"$@"}
+
+umask 022
+
+case $1 in
+  -a )
+    umount -t smbfs -av
+    { find /s -xdev -type d -print0 | sort -rz | xargs -0 rmdir; } 2> /dev/null
+    exit 0
+   ;;
+  -* )
+    echo "cifsumount: Unrecognized option \"$1\"" 1>&2
+    exit 1
+   ;;
+esac
+
+for vol in ${1+"$@"}; do
+  case $vol in
+    //* )  vol=`echo "$vol" | sed -e 's=^//=/s/='` ;;
+    *:/* ) vol=/s/`echo "$vol" | sed -e "s/://"` ;;
+  esac
+  umount -v "$vol"
+done
+
+{ find /s -xdev -type d -print0 | sort -rz | xargs -0 rmdir; } 2> /dev/null
+
+# eof

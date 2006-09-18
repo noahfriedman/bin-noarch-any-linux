@@ -1,0 +1,4 @@
+#!/bin/sh
+# $Id$
+
+exec ${MAKE-make} -C /lib/modules/`uname -r`/build M=`pwd` modules ${1+"$@"}

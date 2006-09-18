@@ -1,0 +1,90 @@
+#!/bin/bash
+# $Id$
+
+for cifs_var in ${!CIFSMOUNT_*}; do
+  var=`echo ${cifs_var#CIFSMOUNT_} | tr '[A-Z]' '[a-z]'`
+  eval smb_$var="'${!cifs_var}'"
+  unset $cifs_var
+done
+
+user=${smb_user-${SUDO_USER-${LOGNAME-${USER-`id -u`}}}}
+
+smb_username=${smb_username-$user}
+smb_workgroup=${smb_workgroup-WORKGROUP}
+
+smb_uid=${smb_uid-$user}
+smb_gid=${smb_gid-`id -g`}
+smb_umask=${smb_umask-`umask`}
+smb_fmask=${smb_fmask-`printf %o $((  0777 & ~$smb_umask ))`}
+smb_dmask=${smb_dmask-`printf %o $(( 02000 | 0$smb_fmask ))`}
+smb_iocharset=${smb_iocharset-'iso8859-1'}
+
+#smb_sockopt=${smb_sockopt-'IPTOS_LOWDELAY TCP_NODELAY SO_SNDBUF=65535 SO_RCVBUF=65535'}
+
+case `id -u` in
+  0 ) umask 022 ;;
+  * ) export ${!smb_*}
+      exec sudo "$0" ${1+"$@"} ;;
+esac
+
+export -n ${!smb_*}
+unset smb_umask # special case
+
+unset cmd_options
+while : ; do
+  case $1 in
+    -o )
+         cmd_options="$cmd_options $2"
+         shift
+         shift ;;
+     * ) break ;;
+  esac
+done
+
+# Parse options on the command line and eval them to override the defaults
+# computed above.
+case ${cmd_options+defined} in
+  defined )
+    eval `echo $cmd_options \
+           | sed -e 's/[ 	,][ 	,]*/ /g' \
+                 -e 's/\([^ =]*\)=\([^ ]*\)/smb_\1="\2"/g'` ;;
+esac
+
+options=
+for var in ${!smb_*}; do
+  opt=${var#smb_}
+  options=$options,$opt=${!var}
+done
+options=${options#,}
+
+for share in ${1+"$@"}; do
+  case $share in
+    /s/* ) share=`echo "$share" | sed -e 's=^/s/=//='`  ;;
+    *\\* ) share=`echo "$share" | sed -e 's=\\\\=/=g'` ;;
+    *:/* ) share=//`echo "$share" | sed -e "s/://"`    ;;
+  esac
+
+  mntpoint=`echo "$share" | sed -e 's=^//=/s/='`
+  test -d "$mntpoint" || mkdir -p "$mntpoint"
+
+  errout=`smbmount "$share" "$mntpoint" -o "$options"`
+
+  case $errout in
+    *"Could not umount $mntpoint:"* )
+      {
+        echo "$errout"
+        if umount "$mntpoint"; then
+          echo
+          echo "cifsmount: unmounted $mntpoint"
+        fi
+      } 1>&2
+      exitstat=1
+     ;;
+  esac
+done
+
+find /s -xdev -type d -print0 | sort -rz | xargs -0 rmdir 2> /dev/null
+
+exit $exitstat
+
+# eof

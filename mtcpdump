@@ -1,0 +1,6 @@
+#!/bin/sh
+# $Id$
+
+exec ${TCPDUMP-tcpdump} -e -l -s 0 -S -u -v -tttt -vvv -XX ${1+"$@"}
+
+# eof
