@@ -1,0 +1,67 @@
+#!/bin/sh
+# xmkmf32 --- run xmkmf on bi-arch systems for 32-bit configuration
+# Author: Noah Friedman <friedman@splode.com>
+# Created: 2006-10-03
+# Public domain
+
+# $Id$
+
+# Commentary:
+
+# On bi-arch linux-based systems, the default is to build 64-bit binaries.
+# This is hardwired into both gcc and imake.  This script intercepts
+# imake's call to the preprocessor, removes any flags which might
+# explicitly enable 64-bit macros, then runs the real preprocessor with -m32.
+
+# This script uses syntax which may require bash 2.0 or later.
+
+# Code:
+
+declare -a elide_args
+elide_args=("-D__amd64__" "-m64")
+
+elidep()
+{
+  local x
+  for x in "${elide_args[@]}"; do
+    [[ $1 = $x ]] && return 0
+  done
+  return 1
+}
+
+cpp32()
+{
+  local -i len=$#
+  local -i i=-1
+  local -a args
+  args=("$@")
+
+  while (( ++i < len )); do
+    elidep "${args[i]}" && unset args[i]
+  done
+
+  set fnord $SETARCH ${CC-gcc} -m32 -E "${args[@]}"
+  shift
+
+  # echo the command we're about to execute to the same stdout that xmkmf
+  # writes; imake inherits this stdout.
+  echo ${1+"$@"} > /proc/$PPID/fd/1
+  exec ${1+"$@"}
+}
+
+main()
+{
+  case ${XMKMF32SUB-no} in
+    no ) : ;;
+    *  ) cpp32 ${1+"$@"} ;;
+  esac
+
+  XMKMF32SUB=yes
+  IMAKECPP=$0
+  export XMKMF32SUB IMAKECPP
+  exec ${XMKMF-xmkmf} ${1+"$@"}
+}
+
+main "$@"
+
+# eof
