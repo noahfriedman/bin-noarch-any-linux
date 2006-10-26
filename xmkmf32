@@ -4,7 +4,7 @@
 # Created: 2006-10-03
 # Public domain
 
-# $Id$
+# $Id: xmkmf32,v 1.1 2006/10/07 00:43:01 friedman Exp $
 
 # Commentary:
 
@@ -59,7 +59,7 @@ main()
   XMKMF32SUB=yes
   IMAKECPP=$0
   export XMKMF32SUB IMAKECPP
-  exec ${XMKMF-xmkmf} ${1+"$@"}
+  exec ${XMKMF_REAL-xmkmf} ${1+"$@"}
 }
 
 main "$@"
