@@ -1,7 +1,7 @@
 #!/bin/sh
-# $Id$
+# $Id: nat-dns,v 1.1 2006/11/07 15:17:39 friedman Exp $
 
-chain=${NAT_DNS_CHAIN-PREROUTING}
+chain=${NAT_DNS_CHAIN-OUTPUT}
 dst=${NAT_DNS_DST-192.168.1.2}
 
 ipt()
