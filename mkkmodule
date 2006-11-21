@@ -1,4 +1,23 @@
 #!/bin/sh
-# $Id$
+# $Id: mkkmodule,v 1.1 2006/09/18 23:27:09 friedman Exp $
 
-exec ${MAKE-make} -C /lib/modules/`uname -r`/build M=`pwd` modules ${1+"$@"}
+deftarget=modules
+for arg in ${1+"$@"}; do
+  case $arg in
+    *=* ) :                  ;;
+    *   ) deftarget= ; break ;;
+  esac
+done
+
+if [ -f Kconfig ]; then
+  set x `sed -e '/^config \(.*\)/!d' -e 's//CONFIG_\1=m/' Kconfig` ${1+"$@"}
+  shift
+fi
+
+set x ${MAKE-make} -C /lib/modules/`uname -r`/build M=`pwd` $deftarget ${1+"$@"}
+shift
+
+echo ${1+"$@"}
+exec ${1+"$@"}
+
+# eof
