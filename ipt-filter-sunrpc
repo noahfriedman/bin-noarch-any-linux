@@ -1,0 +1,61 @@
+#!/bin/bash
+# $Id$
+
+# Assuming that packet filtering is enabled, this script allows or
+# disallows sunrpc packets to pass through.
+
+portinfo()
+{
+  rpcinfo -p "$@" | perl -ane '
+    if ($F[2] =~ /^(tcp|udp)$/) { $p{$F[2]}{$F[3]} = 1 }
+    END { map { @p = sort { $a <=> $b } keys %{$p{$_}};
+                print $_, " ", join (",", @p), "\n" }
+              sort { $a cmp $b } keys %p
+        }'
+}
+
+ipt()
+{
+  local op=$1
+  local proto=$2
+  local ports=$3
+  shift 3
+
+  set fnord \
+      ${IPTABLES-iptables} \
+      $op INPUT \
+      -p $proto \
+      -m multiport \
+      --dports $ports \
+      "$@" \
+      -j ACCEPT
+  shift
+
+  echo + "$@"
+  "$@"
+}
+
+main()
+{
+  case ${EUID-${UID-`id -u`}} in
+    0 ) : ;;
+    * ) exec sudo "$0" "$@" ;;
+  esac
+
+  case $1 in
+    on  | allow | enable  ) op=-I ;;
+    off | deny  | disable ) op=-D ;;
+    * ) echo "Usage: ${0##*/} [allow|deny]" 1>&2 ; exit 1 ;;
+  esac
+
+  shift
+
+  portinfo | while read proto ports ;
+  do
+    ipt $op $proto $ports "$@"
+  done
+}
+
+main "$@"
+
+# eof
