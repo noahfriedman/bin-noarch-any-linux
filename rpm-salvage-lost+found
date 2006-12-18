@@ -1,0 +1,11 @@
+#!/bin/sh
+
+for file in ${1+"$@"}; do
+  md5=`md5sum $file | cut -f1 -d' '`
+  pkg=`rpm -q --fileid "$md5"`
+  case $pkg in
+    'no package matches'* ) loc= ;;
+    * ) loc=`rpm -q --dump "$pkg" | awk '$4 == md5 { print $1 }' md5="$md5"` ;;
+  esac
+  echo $md5 $file $loc
+done
