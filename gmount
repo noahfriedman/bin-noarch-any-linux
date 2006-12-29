@@ -1,0 +1,98 @@
+#!/bin/sh
+# $Id$
+
+set_defaults()
+{
+  GMOUNT=${GMOUNT-gnome-mount}
+  GMOUNT_UID=${GMOUNT_UID-${UID-`id -u`}}
+  GMOUNT_GID=${GMOUNT_GID-${GID-`id -g`}}
+  GMOUNT_USER=${GMOUNT_USER-${SUDO_USER-${LOGNAME-${USER-`whoami`}}}}
+}
+
+set_fsopts()
+{
+  _fsopts()
+  {
+    fsopts=$1
+    shift
+    for o in "$@"; do
+      fsopts=$fsopts,$o
+    done
+  }
+
+  case $fstype:$fsopts in
+    vfat: | fat: | msdos: ) _fsopts       uid=$GMOUNT_UID \
+                                          gid=$GMOUNT_GID \
+                                        umask=000         \
+                                    iocharset=iso8859-1   \
+                                    shortname=mixed       \
+                                    uni_xlate            ;;
+
+    xfs: | ext[23]:       ) _fsopts noatime ;;
+
+    cifs:                 ) _fsopts      user=${GMOUNT_USER} \
+                                          uid=$GMOUNT_UID    \
+                                          gid=$GMOUNT_GID    \
+                                    file_mode=0777           \
+                                     dir_mode=02777          \
+                                    iocharset=iso8859-1      \
+                                       noperm                \
+                                       nocase                \
+                                    serverino                \
+                                   user_xattr               ;;
+  esac
+}
+
+main()
+{
+  set_defaults
+
+  fstype= fsopts= xfsopts=
+  while :; do
+    case $1 in
+      -t ) fstype=$2  ; shift 2 ;;
+      -o ) fsopts=$2  ; shift 2 ;;
+      -x ) xfsopts=$2 ; shift 2 ;;
+       * ) break ;;
+    esac
+  done
+
+  case $# in
+    1 ) device=$1 mountpoint=   ; shift   ;;
+    2 ) device=$1 mountpoint=$2 ; shift 2 ;;
+  esac
+
+  set_defaults
+  set_fsopts
+
+  case  ${fstype:+set} in set ) set "$@" --fstype              "$fstype"  ;; esac
+  case  ${fsopts:+set} in set ) set "$@" --mount-options       "$fsopts"  ;; esac
+  case ${xfsopts:+set} in set ) set "$@" --extra-mount-options "$xfsopts" ;; esac
+
+  case $device in
+    /* ) ;;
+    *  ) device=`find /dev/disk -path "*/$device" -print` ;;
+  esac
+
+  devalias=${device##*/}
+
+  case $mountpoint in
+    '' ) mountpoint=$devalias ;;
+  esac
+
+  set fnord \
+      $GMOUNT \
+      --block \
+      --text  \
+      --device      $device     \
+      --mount-point $mountpoint \
+      "$@"
+  shift
+
+  echo + "$@"
+  exec "$@"
+}
+
+main "$@"
+
+# eof
