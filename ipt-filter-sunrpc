@@ -1,5 +1,5 @@
 #!/bin/bash
-# $Id$
+# $Id: ipt-filter-sunrpc,v 1.1 2006/12/13 00:02:55 friedman Exp $
 
 # Assuming that packet filtering is enabled, this script allows or
 # disallows sunrpc packets to pass through.
@@ -12,6 +12,11 @@ portinfo()
                 print $_, " ", join (",", @p), "\n" }
               sort { $a cmp $b } keys %p
         }'
+}
+
+currentfilter()
+{
+  iptables -L INPUT -n | awk '/ipt-filter-sunrpc/ {print $2, $8}'
 }
 
 ipt()
@@ -27,6 +32,8 @@ ipt()
       -p $proto \
       -m multiport \
       --dports $ports \
+      -m comment \
+      --comment "ipt-filter-sunrpc" \
       "$@" \
       -j ACCEPT
   shift
@@ -43,14 +50,14 @@ main()
   esac
 
   case $1 in
-    on  | allow | enable  ) op=-I ;;
-    off | deny  | disable ) op=-D ;;
+    on  | allow | enable  ) op=-I cmd=portinfo ;;
+    off | deny  | disable ) op=-D cmd=currentfilter ;;
     * ) echo "Usage: ${0##*/} [allow|deny]" 1>&2 ; exit 1 ;;
   esac
 
   shift
 
-  portinfo | while read proto ports ;
+  $cmd | while read proto ports ;
   do
     ipt $op $proto $ports "$@"
   done
