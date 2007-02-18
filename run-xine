@@ -1,0 +1,20 @@
+#!/bin/sh
+
+DISPLAY=${DISPLAY-:0.0}
+export DISPLAY
+
+exec with -s \
+  xine --auto-play \
+       --hide-gui \
+       --network \
+       --broadcast-port 17290 \
+       --no-logo \
+       --no-splash \
+       --no-reload \
+       --geometry +0+0 \
+       --audio-driver alsa \
+       --video-driver xv \
+    ${1+"$@"} \
+  >> $HOME/.xinitrc.log 2>&1 < /dev/null
+
+# eof
