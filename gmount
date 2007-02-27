@@ -1,5 +1,5 @@
 #!/bin/sh
-# $Id$
+# $Id: gmount,v 1.1 2006/12/29 04:19:06 friedman Exp $
 
 set_defaults()
 {
@@ -28,6 +28,11 @@ set_fsopts()
                                     shortname=mixed       \
                                     uni_xlate            ;;
 
+    hfs: | hfsplus:       ) _fsopts       uid=$GMOUNT_UID \
+                                          gid=$GMOUNT_GID \
+                                        umask=000         \
+                                         exec            ;;
+
     xfs: | ext[23]:       ) _fsopts noatime ;;
 
     cifs:                 ) _fsopts      user=${GMOUNT_USER} \
@@ -47,12 +52,13 @@ main()
 {
   set_defaults
 
-  fstype= fsopts= xfsopts=
+  fstype= fsopts= xfsopts= unmount=
   while :; do
     case $1 in
       -t ) fstype=$2  ; shift 2 ;;
       -o ) fsopts=$2  ; shift 2 ;;
       -x ) xfsopts=$2 ; shift 2 ;;
+      -u ) unmount=$1 ; shift   ;;
        * ) break ;;
     esac
   done
@@ -65,9 +71,9 @@ main()
   set_defaults
   set_fsopts
 
-  case  ${fstype:+set} in set ) set "$@" --fstype              "$fstype"  ;; esac
-  case  ${fsopts:+set} in set ) set "$@" --mount-options       "$fsopts"  ;; esac
-  case ${xfsopts:+set} in set ) set "$@" --extra-mount-options "$xfsopts" ;; esac
+  case  ${fstype:+set} in set ) set x "$@" --fstype              "$fstype"  ; shift ;; esac
+  case  ${fsopts:+set} in set ) set x "$@" --mount-options       "$fsopts"  ; shift ;; esac
+  case ${xfsopts:+set} in set ) set x "$@" --extra-mount-options "$xfsopts" ; shift ;; esac
 
   case $device in
     /* ) ;;
@@ -81,7 +87,7 @@ main()
   esac
 
   set fnord \
-      $GMOUNT \
+      $GMOUNT $unmount \
       --block \
       --text  \
       --device      $device     \
