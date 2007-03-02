@@ -1,5 +1,5 @@
 #!/bin/sh
-# $Id: gmount,v 1.1 2006/12/29 04:19:06 friedman Exp $
+# $Id: gmount,v 1.2 2007/02/27 07:30:35 friedman Exp $
 
 set_defaults()
 {
@@ -7,6 +7,33 @@ set_defaults()
   GMOUNT_UID=${GMOUNT_UID-${UID-`id -u`}}
   GMOUNT_GID=${GMOUNT_GID-${GID-`id -g`}}
   GMOUNT_USER=${GMOUNT_USER-${SUDO_USER-${LOGNAME-${USER-`whoami`}}}}
+}
+
+get_udi()
+{
+  bdev=`readlink --canonicalize "$1"`
+  hal-find-by-property --key block.device --string $bdev
+}
+
+get_udi_prop()
+{
+  case $1 in
+    /org/freedesktop/Hal/devices/* ) : ;;
+    * ) set x `get_udi "$1"` "$2"; shift ;;
+  esac
+
+  hal-get-property --udi "$1" --key "$2"
+}
+
+get_fstype()
+{
+  get_udi_prop "$1" volume.fstype
+}
+
+# TODO: validate mount options and filter those not allowed by the hal.
+get_allowed_mountopts()
+{
+  get_udi_prop "$1" volume.mount.valid_options
 }
 
 set_fsopts()
@@ -68,20 +95,24 @@ main()
     2 ) device=$1 mountpoint=$2 ; shift 2 ;;
   esac
 
-  set_defaults
+  case $device in
+    /* ) ;;
+    *  ) device=`find /dev/disk -path "*/$device" -print` ;;
+  esac
+
+  udi=`get_udi "$device"`
+
+  case $fstype in
+    '' ) fstype=`get_fstype "$udi"` ;;
+  esac
+
   set_fsopts
 
   case  ${fstype:+set} in set ) set x "$@" --fstype              "$fstype"  ; shift ;; esac
   case  ${fsopts:+set} in set ) set x "$@" --mount-options       "$fsopts"  ; shift ;; esac
   case ${xfsopts:+set} in set ) set x "$@" --extra-mount-options "$xfsopts" ; shift ;; esac
 
-  case $device in
-    /* ) ;;
-    *  ) device=`find /dev/disk -path "*/$device" -print` ;;
-  esac
-
   devalias=${device##*/}
-
   case $mountpoint in
     '' ) mountpoint=$devalias ;;
   esac

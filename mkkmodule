@@ -1,5 +1,7 @@
 #!/bin/sh
-# $Id: mkkmodule,v 1.1 2006/09/18 23:27:09 friedman Exp $
+# $Id: mkkmodule,v 1.2 2006/11/21 00:15:47 friedman Exp $
+
+KVERSION=${KVERSION-`uname -r`}
 
 deftarget=modules
 for arg in ${1+"$@"}; do
@@ -14,7 +16,7 @@ if [ -f Kconfig ]; then
   shift
 fi
 
-set x ${MAKE-make} -C /lib/modules/`uname -r`/build M=`pwd` $deftarget ${1+"$@"}
+set x ${MAKE-make} -C /lib/modules/$KVERSION/build M=`pwd` $deftarget ${1+"$@"}
 shift
 
 echo ${1+"$@"}
