@@ -3,6 +3,7 @@
 DISPLAY=${DISPLAY-:0.0}
 export DISPLAY
 
+#      --video-driver xv \
 exec with -s \
   xine --auto-play \
        --hide-gui \
@@ -13,7 +14,6 @@ exec with -s \
        --no-reload \
        --geometry +0+0 \
        --audio-driver alsa \
-       --video-driver xv \
     ${1+"$@"} \
   >> $HOME/.xinitrc.log 2>&1 < /dev/null
 
