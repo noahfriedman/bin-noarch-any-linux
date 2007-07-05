@@ -1,0 +1,52 @@
+#!/bin/bash
+# $Id$
+
+currentfilter()
+{
+  iptables -L INPUT -n | awk '/ipt-pass-all/ {print $2}'
+}
+
+ipt()
+{
+  local op=$1
+  local proto=$2
+  shift 2
+
+  set fnord \
+      ${IPTABLES-iptables} \
+      $op INPUT \
+      -p $proto \
+      -m comment \
+      --comment "ipt-pass-all" \
+      "$@" \
+      -j ACCEPT
+  shift
+
+  echo + "$@"
+  "$@"
+}
+
+main()
+{
+  case ${EUID-${UID-`id -u`}} in
+    0 ) : ;;
+    * ) exec sudo "$0" "$@" ;;
+  esac
+
+  op=$1
+  shift
+
+  case $op in
+    on  | allow | enable  )
+      ipt -I tcp "$@"
+      ipt -I udp "$@" ;;
+    off | deny  | disable )
+      ipt -D tcp "$@"
+      ipt -D udp "$@" ;;
+    * ) echo "Usage: ${0##*/} [allow|deny]" 1>&2 ; exit 1 ;;
+  esac
+}
+
+main "$@"
+
+# eof
