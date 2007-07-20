@@ -1,3 +1,28 @@
 #!/bin/sh
-# Use the 32-bit version of firefox so that I can use plugins.
-exec linux32 run-next "$0" ${1+"$@"}
+# $Id$
+
+# Use the `linux32' front end to insure we run the 32-bit version of firefox.
+# This is for the sake of getting common plugins such as adobe's flash player.
+linux32=linux32
+
+case $* in
+  *-ProfileManager* ) exec $linux32 run-next "$0" "$@" ;;
+esac
+
+numscreens=`xdpyinfo | sed -n -e '/^number of screens: */s///p'`
+case $numscreens in
+  1 ) exec $linux32 run-next "$0" "$@" ;;
+esac
+
+prog=`run-next -p "$0"`
+if $linux32 "$prog" -remote 'ping()' 2> /dev/null ; then
+  exec "$prog" "$@"
+else
+  case $DISPLAY in
+    *:0.0 ) set fnord -P firefox2     "$@"; shift ;;
+    *:0.1 ) set fnord -P firefox2.2nd "$@"; shift ;;
+  esac
+  exec $linux32 "$prog" "$@"
+fi
+
+# eof
