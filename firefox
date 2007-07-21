@@ -1,9 +1,13 @@
 #!/bin/sh
-# $Id$
+# $Id: firefox,v 1.2 2007/07/20 00:12:17 friedman Exp $
 
-# Use the `linux32' front end to insure we run the 32-bit version of firefox.
-# This is for the sake of getting common plugins such as adobe's flash player.
-linux32=linux32
+# Use the `linux32' wrapper on x86_64 machines to insure we run the 32-bit
+# version of firefox.  This is for the sake of getting common plugins such
+# as adobe's flash player.
+linux32=
+case `uname -m` in
+  x86_64 ) linux32=linux32 ;;
+esac
 
 case $* in
   *-ProfileManager* ) exec $linux32 run-next "$0" "$@" ;;
