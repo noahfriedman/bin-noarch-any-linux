@@ -1,0 +1,163 @@
+#!/usr/bin/perl
+# env-of --- print environment variables of running process
+# Author: Noah Friedman <friedman@splode.com>
+# Created: 2008-01-10
+# Public domain
+
+# $Id$
+
+# Commentary:
+# Code:
+
+$^W = 1; # enable warnings
+
+use strict;
+use POSIX;
+use Symbol;
+
+sub xcat
+{
+  my $fh = gensym;
+  local $_;
+  open ($fh, $_[0]) || return;
+
+  if (-s $fh)
+    {
+      sysread ($fh, $_, -s $fh, 0);  # -s returns size
+    }
+  else
+    {
+      my $offset = 0;
+      while (1)
+        {
+          my $amt = sysread ($fh, $_, 4096, $offset);
+          last unless $amt;
+          $offset += $amt;
+        }
+    }
+
+  close ($fh);
+  return $_;
+}
+
+sub basename
+{
+  local $_ = shift;
+  s=.*/==;
+  return $_;
+}
+
+
+sub pids
+{
+  my $dfh = gensym;
+  opendir ($dfh, "/proc") || return ;
+  my @pids = sort { $a <=> $b } grep { /^\d+$/ } readdir $dfh;
+  closedir ($dfh);
+  return @pids;
+}
+
+sub cmdline
+{
+  my $pid = shift;
+  my $cmdline = xcat ("/proc/$pid/cmdline");
+  return unless defined $cmdline;
+  split (/\0/, $cmdline);
+}
+
+sub exe
+{
+  my $pid = shift;
+  my $exe = readlink ("/proc/$pid/exe");
+  return $exe;
+}
+
+sub pidof
+{
+  my ($name) = @_;
+
+  my @allpids = pids ();
+  my @pid;
+  for my $p (@allpids)
+    {
+      my @cmdline = cmdline ($p);
+      if (@cmdline &&
+          ($cmdline[0] eq $name
+           || basename ($cmdline[0]) eq $name))
+        {
+          push @pid, $p;
+          next;
+        }
+
+      my $exe = exe ($p);
+      next unless defined $exe;
+      push @pid, $p
+        if ($exe eq $name || basename ($exe) eq $name);
+    }
+
+  return @pid;
+}
+
+sub env
+{
+  my $pid = shift;
+  local $_ = xcat ("/proc/$pid/environ");
+  return unless defined $_;
+
+  my %env;
+  map { my ($key, $val) = split (/=/, $_, 2);
+        $env{$key} = $val;
+      } split (/\0/, $_);
+
+  return \%env;
+}
+
+sub sprintenv
+{
+  my $env = shift;
+  @_ = keys %$env unless @_;
+
+  map { sprintf ("%s=%s\n", $_, $env->{$_}) }
+      sort { $a cmp $b } @_;
+}
+
+sub main
+{
+  my $procname = shift;
+  my @varnames = @_;
+
+  my @pid = ($procname =~ /^\d+$/
+             ? $procname
+             : pidof ($procname));
+  unless (@pid)
+    {
+      print STDERR "$procname: Cannot find process by name\n";
+      exit 1;
+    }
+
+  if (@pid > 1)
+    {
+      map {
+        my $env = env ($_);
+        next unless $env;
+        my @cmdline = cmdline ($_);
+        unless (@cmdline)
+          {
+            $cmdline[0] = exe ($_) || "";
+          }
+
+        printf "%d: %s\n", $_, join (" ", @cmdline);
+        print sprintenv ($env, @varnames), "\n";
+      } @pid;
+    }
+  else
+    {
+      my $env = env ($pid[0]);
+      print sprintenv ($env, @varnames)
+        if $env;
+    }
+}
+
+main (@ARGV);
+
+# eof
