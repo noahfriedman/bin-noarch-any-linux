@@ -1,4 +1,4 @@
 #!/bin/sh
-# $Id$
+# $Id: mltrace,v 1.1 2005/08/15 12:41:45 friedman Exp $
 
-exec ltrace -C -f -n2 -s 65535 -S -T "$@"
+exec ${LTRACE-ltrace} -C -f -n2 -s 65535 -S -T "$@"
