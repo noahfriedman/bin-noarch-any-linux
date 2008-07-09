@@ -1,5 +1,5 @@
 #!/bin/sh
-# $Id: firefox,v 1.2 2007/07/20 00:12:17 friedman Exp $
+# $Id: firefox,v 1.3 2007/07/21 07:10:41 friedman Exp $
 
 # Use the `linux32' wrapper on x86_64 machines to insure we run the 32-bit
 # version of firefox.  This is for the sake of getting common plugins such
@@ -9,24 +9,28 @@ case `uname -m` in
   x86_64 ) linux32=linux32 ;;
 esac
 
+prog=`run-next -p "$0"`
+
 case $* in
-  *-ProfileManager* ) exec $linux32 run-next "$0" "$@" ;;
+  *-ProfileManager* ) exec $linux32 "$prog" "$@" ;;
 esac
+
+if $linux32 "$prog" -remote 'ping()' 2> /dev/null ; then
+  exec $linux32 "$prog" "$@"
+fi
 
 numscreens=`xdpyinfo | sed -n -e '/^number of screens: */s///p'`
 case $numscreens in
-  1 ) exec $linux32 run-next "$0" "$@" ;;
+  1 ) exec $linux32 "$prog" "$@" ;;
 esac
 
-prog=`run-next -p "$0"`
-if $linux32 "$prog" -remote 'ping()' 2> /dev/null ; then
-  exec "$prog" "$@"
-else
-  case $DISPLAY in
-    *:0.0 ) set fnord -P firefox2     "$@"; shift ;;
-    *:0.1 ) set fnord -P firefox2.2nd "$@"; shift ;;
-  esac
-  exec $linux32 "$prog" "$@"
-fi
+version=`$linux32 "$prog" -version \
+           | sed -e 's/^.*Firefox \([0-9]*\)\..*/\1/'`
+case $DISPLAY in
+  :*.0 ) set fnord -P firefox$version     "$@"; shift ;;
+  :*.1 ) set fnord -P firefox$version.2nd "$@"; shift ;;
+esac
+
+exec $linux32 "$prog" "$@"
 
 # eof
