@@ -1,0 +1,14 @@
+#!/bin/bash
+# $Id$
+
+SHLVL=0
+LC_CTYPE=en_US.UTF-8
+export SHLVL LC_CTYPE
+
+if [ -x /opt/lude/bin/screen ]; then
+  exec -a screen /opt/lude/bin/screen "$@"
+fi
+
+exec run-next "$0" "$@"
+
+# eof
