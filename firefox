@@ -1,5 +1,5 @@
 #!/bin/sh
-# $Id: firefox,v 1.3 2007/07/21 07:10:41 friedman Exp $
+# $Id: firefox,v 1.4 2008/07/09 04:27:58 friedman Exp $
 
 # Use the `linux32' wrapper on x86_64 machines to insure we run the 32-bit
 # version of firefox.  This is for the sake of getting common plugins such
@@ -25,7 +25,8 @@ case $numscreens in
 esac
 
 version=`$linux32 "$prog" -version \
-           | sed -e 's/^.*Firefox \([0-9]*\)\..*/\1/'`
+           | sed -e 's/^.*Firefox \([0-9]*\)\.\([0-9]*\).*/\1\2/' \
+                 -e '/^\(.\)0/s//\1/'`
 case $DISPLAY in
   :*.0 ) set fnord -P firefox$version     "$@"; shift ;;
   :*.1 ) set fnord -P firefox$version.2nd "$@"; shift ;;
