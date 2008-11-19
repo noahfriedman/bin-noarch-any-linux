@@ -1,17 +1,48 @@
 #!/bin/sh
-# $Id$
+# $Id: rpm-salvage-lost+found,v 1.2 2008/11/19 06:38:48 friedman Exp $
 
-for file in ${1+"$@"}; do
-  test -L $file && continue
-  test -f $file || continue
+# Attempt to figure out where files in lost+found originally came from by
+# searching the rpm database for their md5 checksum.
 
-  md5=`md5sum $file | cut -f1 -d' '`
-  loc=`rpm -q --dump --fileid "$md5" | awk '$4 == md5 { print $1 }' md5="$md5"`
-  case $loc in
-    '' ) continue ;;
+lookup()
+{
+  while read file; do
+    test -L "$file" && continue
+    test -f "$file" || continue
+
+    md5=`md5sum "$file" | cut -f1 -d' '`
+    pkg=`rpm -q --qf "%{name}-%{version}-%{release}.%{arch}" --fileid "$md5"`
+    case $pkg in
+      'no package matches'* | '' ) continue ;;
+    esac
+
+    loc=`rpm -q --dump "$pkg" | awk '$4 == md5 { print $1 }' md5="$md5"`
+    echo $md5 $file $pkg $loc
+  done
+}
+
+salvage()
+{
+  case $# in
+    0 ) lookup ;;
+    1 ) if [ -d "$1" -a ! -L "$1" ]; then
+          (cd "$1" && salvage *)
+        else
+          echo "$1" | lookup
+        fi ;;
+    * ) for file in "$@"; do echo "$file"; done | lookup ;;
   esac
+}
 
-  echo $md5 $file $loc
-done
+main()
+{
+  case $1 in
+    -f ) shift ;
+         salvage "$@" | sort -k3,3 -k4,4 | fmtcols -N ;;
+    *  ) salvage "$@" ;;
+  esac
+}
+
+main "$@"
 
 # eof
