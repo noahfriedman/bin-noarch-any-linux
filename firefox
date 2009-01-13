@@ -1,13 +1,15 @@
 #!/bin/sh
-# $Id: firefox,v 1.4 2008/07/09 04:27:58 friedman Exp $
+# $Id: firefox,v 1.5 2008/11/09 00:23:41 friedman Exp $
 
 # Use the `linux32' wrapper on x86_64 machines to insure we run the 32-bit
 # version of firefox.  This is for the sake of getting common plugins such
 # as adobe's flash player.
+#
+# 2009-01-13 for now, stick with native arch and use nspluginwrapper.
 linux32=
-case `uname -m` in
-  x86_64 ) linux32=linux32 ;;
-esac
+#case `uname -m` in
+#  x86_64 ) linux32=linux32 ;;
+#esac
 
 prog=`run-next -p "$0"`
 
