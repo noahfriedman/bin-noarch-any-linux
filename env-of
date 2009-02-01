@@ -4,7 +4,7 @@
 # Created: 2008-01-10
 # Public domain
 
-# $Id$
+# $Id: env-of,v 1.1 2008/01/11 00:44:48 friedman Exp $
 
 # Commentary:
 # Code:
@@ -72,27 +72,52 @@ sub exe
   return $exe;
 }
 
+sub stat_name
+{
+  my $pid = shift;
+  my $stat = xcat ("/proc/$pid/stat");
+  return unless defined $stat;
+  my @s = split (/\s+/, $stat);
+  $s[1] =~ s/^\((.*)\)$/$1/;
+  return $s[1];
+}
+
 sub pidof
 {
   my ($name) = @_;
+  my $re = ($name =~ m|^/(.*)/$| ? $1 : undef);
 
   my @allpids = pids ();
   my @pid;
   for my $p (@allpids)
     {
       my @cmdline = cmdline ($p);
-      if (@cmdline &&
-          ($cmdline[0] eq $name
-           || basename ($cmdline[0]) eq $name))
+      if (@cmdline
+          && ($cmdline[0] eq $name
+              || basename ($cmdline[0]) eq $name
+              || (defined $re && $cmdline[0] =~ $re)))
         {
           push @pid, $p;
           next;
         }
 
       my $exe = exe ($p);
-      next unless defined $exe;
-      push @pid, $p
-        if ($exe eq $name || basename ($exe) eq $name);
+      if (defined $exe
+          && ($exe eq $name
+              || basename ($exe) eq $name
+              || (defined $re && $exe =~ $re)))
+        {
+          push @pid, $p;
+          next;
+        }
+
+      my $stat_name = stat_name ($p);
+      if (defined $stat_name
+          && ($stat_name eq $name
+              || (defined $re && $stat_name =~ $re)))
+        {
+          push @pid, $p;
+        }
     }
 
   return @pid;
@@ -112,13 +137,33 @@ sub env
   return \%env;
 }
 
+sub varnames
+{
+  my $env = shift;
+  my %var;
+
+  map { if (m=^/(.*)/$=)
+          {
+            my $re = $1;
+            map { $var{$_} = 1 if $_ =~ $re } keys %$env;
+          }
+        else
+          {
+            $var{$_} = 1;
+          }
+      } @_;
+
+  return keys %var;
+}
+
 sub sprintenv
 {
   my $env = shift;
-  @_ = keys %$env unless @_;
+  my @vars = @_ ? varnames ($env, @_) : keys %$env;
 
-  map { sprintf ("%s=%s\n", $_, $env->{$_}) }
-      sort { $a cmp $b } @_;
+  map { sprintf ("%s=%s\n", $_, $env->{$_})
+          if exists $env->{$_} }
+      sort { $a cmp $b } @vars;
 }
 
 sub main
@@ -139,22 +184,28 @@ sub main
     {
       map {
         my $env = env ($_);
-        next unless $env;
-        my @cmdline = cmdline ($_);
-        unless (@cmdline)
+        if ($env)
           {
-            $cmdline[0] = exe ($_) || "";
-          }
+            my @cmdline = cmdline ($_);
+            unless (@cmdline)
+              {
+                $cmdline[0] = exe ($_) || "";
+              }
 
-        printf "%d: %s\n", $_, join (" ", @cmdline);
-        print sprintenv ($env, @varnames), "\n";
+            printf "%d: %s\n", $_, join (" ", @cmdline);
+            print sprintenv ($env, @varnames), "\n";
+          }
       } @pid;
     }
   else
     {
+      unless (-d "/proc/$pid[0]")
+        {
+          print STDERR "$pid[0]: No such process\n";
+          exit 1;
+        }
       my $env = env ($pid[0]);
-      print sprintenv ($env, @varnames)
-        if $env;
+      print sprintenv ($env, @varnames) if $env;
     }
 }
 
