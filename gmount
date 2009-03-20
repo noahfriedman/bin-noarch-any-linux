@@ -1,5 +1,5 @@
 #!/bin/sh
-# $Id: gmount,v 1.2 2007/02/27 07:30:35 friedman Exp $
+# $Id: gmount,v 1.3 2007/03/02 02:38:28 friedman Exp $
 
 set_defaults()
 {
@@ -60,7 +60,7 @@ set_fsopts()
                                         umask=000         \
                                          exec            ;;
 
-    xfs: | ext[23]:       ) _fsopts noatime ;;
+    xfs: | ext[234]:      ) _fsopts noatime ;;
 
     cifs:                 ) _fsopts      user=${GMOUNT_USER} \
                                           uid=$GMOUNT_UID    \
