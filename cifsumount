@@ -1,5 +1,5 @@
 #!/bin/sh
-# $Id$
+# $Id: cifsumount,v 1.1 2006/09/18 23:24:26 friedman Exp $
 
 test `id -u` -eq 0 || exec sudo "$0" ${1+"$@"}
 
@@ -7,7 +7,7 @@ umask 022
 
 case $1 in
   -a )
-    umount -t smbfs -av
+    umount -t cifs -av
     { find /s -xdev -type d -print0 | sort -rz | xargs -0 rmdir; } 2> /dev/null
     exit 0
    ;;
