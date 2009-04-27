@@ -1,0 +1,12 @@
+#!/bin/sh
+# $Id$
+
+rpm-pkg-list -s name,arch,version-release \
+  | perl -ane ' next if $F[1] =~ /^(?:gpg-pubkey|kernel)/;
+                $old = "$F[1].$F[3]";
+                $this = "$F[1]-$F[2].$F[3]";
+                print "$seen{$old}\t$this\n" if exists $seen{$old};
+                $seen{$old} = $this; ' \
+  | fmtcols -S '  =>  '
+
+# eof
