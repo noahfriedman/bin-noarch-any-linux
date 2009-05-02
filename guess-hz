@@ -1,0 +1,95 @@
+#!/usr/bin/env perl
+# $Id$
+
+# Caveat: This does not tell you whether the kernel uses 'tickless idle'.
+# In that case, the number of interrupts will vary depending on load.
+
+$^W = 1; # enable warnings
+
+use strict;
+use Symbol;
+
+sub xcat
+{
+  my $fh = gensym;
+  local $_;
+  open ($fh, $_[0]) || return;
+
+  if (-s $fh)
+    {
+      sysread ($fh, $_, -s $fh, 0);  # -s returns size
+    }
+  else
+    {
+      my $offset = 0;
+      while (1)
+        {
+          my $amt = sysread ($fh, $_, 4096, $offset);
+          last unless $amt;
+          $offset += $amt;
+        }
+    }
+
+  close ($fh);
+  return $_;
+}
+
+# fh may be a filehandle or a reference to an array of handles
+# mode 1 = buffering, 0 = no buffering
+sub set_buffering_mode
+{
+  my ($fh, $mode) = @_;
+  my $orig = select (ref $fh eq 'ARRAY' ? $fh->[0] : $fh);
+
+  for my $handle (ref $fh eq 'ARRAY' ? @$fh : $fh)
+    {
+      select ($handle);
+      $| = ($mode == 0);
+    }
+  select ($orig);
+}
+
+sub sum_row
+{
+  my $i = 0;
+  map { $i += $_ } split (/\s+/, $_[0], 0);
+  return $i;
+}
+
+sub ticks
+{
+  local $_ = xcat ("/proc/interrupts");
+
+  my $timer = sum_row ($1) if /^\s*0:\s*([\d\s]*)/m;
+  my $loc   = sum_row ($1) if /^\s*LOC:\s*([\d\s]*)/m;
+  $timer += $loc if defined $loc;
+  return $timer;
+}
+
+sub msg
+{
+  if (-t 1)
+    {
+      set_buffering_mode (*STDERR{IO}, 0);
+      printf STDERR join (" ", @_);
+    }
+}
+
+sub main
+{
+  my $interval = 5;
+  my $start = ticks ();
+
+  msg ("Counting interrupts for $interval seconds...");
+  sleep ($interval);
+  msg ("done.\n\n");
+
+  my $end = ticks ();
+  my $hz = ($end - $start) / $interval;
+
+  print $hz, " HZ\n";
+}
+
+main (@ARGV);
+
+# eof
