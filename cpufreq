@@ -1,0 +1,33 @@
+#!/bin/sh
+# $Id$
+
+# Set the maximum allowed cpu frequency.
+
+sys=/sys/devices/system/cpu
+
+read min_freq < $sys/cpu0/cpufreq/cpuinfo_min_freq
+read max_freq < $sys/cpu0/cpufreq/cpuinfo_max_freq
+read cur_max  < $sys/cpu0/cpufreq/scaling_max_freq
+read avail    < $sys/cpu0/cpufreq/scaling_available_frequencies
+
+case $1 in
+  min* ) new=$min_freq ;;
+  max* ) new=$max_freq ;;
+
+  avail* | help ) echo $avail   ; exit 0 ;;
+  ''            ) echo $cur_max ; exit 0 ;;
+
+  * ) # Test to see if specified frequency is allowed.
+      case " $avail " in
+        *" $1 "* ) new=$1 ;;
+        * ) echo Available frequencies: $avail 1>&2 ; exit 1 ;;
+      esac ;;
+esac
+
+for cpu in $sys/cpu*/cpufreq ; do
+  echo $new > $cpu/scaling_max_freq
+done
+
+echo $new
+
+# eof
