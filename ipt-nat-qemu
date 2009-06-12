@@ -1,0 +1,56 @@
+#!/bin/sh
+# $Id$
+
+qemu_net=192.168.111.0/24
+
+vcmd()
+{
+  test -t 1 && echo + "$@" 1>&2
+  "$@"
+}
+
+nat_qemu_flush()
+{
+  _q=${qemu_net%/*}
+
+  iptables -t nat -S POSTROUTING \
+   | sed -e '/^-A/!d' \
+         -e "/-s $_q/!d" \
+         -e 's/^-A/-D/' \
+   | while read l; do
+       vcmd iptables -t nat $l
+     done
+}
+
+nat_qemu()
+{
+  vcmd iptables -t nat -A POSTROUTING -s $qemu_net "$@"
+}
+
+dev_to()
+{
+  ip -o route list exact $1 | sed -e 's/.* via \(.*\) dev /addr=\1 dev=/'
+}
+
+main()
+{
+  nat_qemu_flush
+
+  case $1 in
+    off ) exit $? ;;
+  esac
+
+  # nat openvpn
+  eval `dev_to 192.168.6.0/24`
+  case $dev in
+    tun* ) nat_qemu -o $dev -j SNAT --to-source $addr ;;
+  esac
+
+  for dev in eth0 iwl0 ; do
+    nat_qemu -o $dev -j MASQUERADE
+  done
+}
+
+main "$@"
+
+# eof
