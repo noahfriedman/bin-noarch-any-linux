@@ -1,5 +1,5 @@
 #!/bin/sh
-# $Id$
+# $Id: ipt-nat-qemu,v 1.1 2009/06/12 03:59:01 friedman Exp $
 
 qemu_net=192.168.111.0/24
 
@@ -29,11 +29,17 @@ nat_qemu()
 
 dev_to()
 {
-  ip -o route list exact $1 | sed -e 's/.* via \(.*\) dev /addr=\1 dev=/'
+  ip -o addr show to 192.168.6.0/24 \
+   | sed -e 's/^[0-9]*: \([^ ]*\)  *inet \([0-9.]*\) .*/dev=\1 addr=\2/'
 }
 
 main()
 {
+  case ${EUID-${UID-`id -u`}} in
+    0 ) : ;;
+    * ) exec sudo "$0" "$@" ;;
+  esac
+
   nat_qemu_flush
 
   case $1 in
