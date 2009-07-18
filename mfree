@@ -1,0 +1,62 @@
+#!/bin/sh
+# mfree --- show linux memory statistics
+# Author: Noah Friedman <friedman@splode.com>
+# Created: 2009-07-17
+# Public domain
+
+# $Id$
+
+# Commentary:
+
+# This script prints a report on memory statistics similar to the
+# util-linux-ng "free" command.  The main differences are:
+#
+#   * It gets rid of the obsolete "shared" column
+#   * It always prints the "Total" row.  No "-t" flag.
+#   * Unlike the busybox variant, it shows the -/+ buffers/cache line.
+#
+# The only external command this script depends on is the coreutils/busybox
+# "printf" command, for formatting.  I can't stand the idea of inlining that.
+
+# Code:
+
+# For android busybox; should be harmless elsewhere
+PATH=/system/xbin/bb:$PATH
+
+op=* factor=1
+case $1 in
+  -b* ) op=* factor=1024 ;;
+  -k* ) ;; # default
+  -m* ) op=/ factor=1024 ;;
+  -g* ) op=/ factor=$((1024 * 1024)) ;;
+esac
+
+exec < /proc/meminfo
+while read key val ign ; do
+  case $key in
+    *'('* ) continue ;;
+  esac
+  key=${key%:}
+  val=$((val $op factor))
+  eval $key=$val
+done
+
+  MemUsed=$((MemTotal - MemFree))
+MemNCFree=$((MemFree + Buffers + Cached))
+   MemUNC=$((MemUsed - Buffers - Cached))
+ SwapUsed=$((SwapTotal - SwapFree))
+
+    Total=$((MemTotal + SwapTotal))
+TotalUsed=$((MemUsed  + SwapUsed))
+TotalFree=$((MemFree  + SwapFree))
+
+  fmt="%-6s%12s%11s%11s%11s%11s\n"
+fmtbc="%-0s%11s%11s%11s%11s%11s\n"
+
+printf "$fmt"   ""             total       used       free    buffers     cached
+printf "$fmt"   Mem:       $MemTotal   $MemUsed   $MemFree   $Buffers    $Cached
+printf "$fmtbc" "-/+ buffers/cache:"    $MemUNC $MemNCFree
+printf "$fmt"   Swap:     $SwapTotal  $SwapUsed  $SwapFree
+printf "$fmt"  Total:         $Total $TotalUsed $TotalFree
+
+# eof
