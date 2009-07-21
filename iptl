@@ -1,5 +1,5 @@
 #!/bin/sh
-# $Id$
+# $Id: iptl,v 1.1 2006/08/31 22:27:31 friedman Exp $
 
 iptn=/proc/net/ip_tables_names
 
@@ -10,18 +10,20 @@ main()
     * ) exec sudo "$0" ${1+"$@"} ;;
   esac
 
-  case $1 in
-    -a ) table=-a ;;
-    *  ) table=filter
-         if table_p $1; then
-           table=$1
-           shift
-         fi ;;
+  table=filter
+  case $#:$1 in
+    0:*  ) : ;;
+    *:-a ) table=-a ;;
+    *:*  ) if table_p $1; then
+             table=$1
+             shift
+           fi ;;
   esac
 
-  case $1 in
-    -* ) chain=           ;;
-    *  ) chain=$1 ; shift ;;
+  case $#:$1 in
+    0:* ) : ;;
+    *:-* ) chain=           ;;
+    *:*  ) chain=$1 ; shift ;;
   esac
 
   case $table in
