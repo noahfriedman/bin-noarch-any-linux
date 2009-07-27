@@ -1,0 +1,107 @@
+#!/usr/bin/env perl
+# kernel-extract-config -- extract embedded kernel config info from a linux bzImage
+# Author: Noah Friedman <friedman@splode.com>
+# Created: 2009-07-27
+# Public domain
+
+# $Id$
+
+# Commentary:
+
+# Note: the kernel image only has embedded configuration information if it
+# was built with CONFIG_IKCONFIG.  Most Fedora kernels are not; most
+# Android kernels are.
+#
+# If compiled with CONFIG_IKCONFIG_PROC, this information is also
+# retrievable from the running kernel via /proc/config.gz.
+
+# Code:
+
+$^W = 1; # enable warnings
+
+use strict;
+use Symbol;
+use IO::Uncompress::Gunzip qw(gunzip $GunzipError);
+use Fcntl qw(:DEFAULT :seek);
+
+sub xopen
+{
+  my ($filename, $flags) = @_;
+  my $fh = gensym;
+
+  die "$0: $filename: $!\n"
+    unless (sysopen ($fh, $filename, $flags, 0666));
+  return $fh;
+}
+
+# read as much as possible until eof; don't return partial reads
+sub xread
+{
+  my ($fh, $size, $offset) = @_[0,2,3];  # buffer $_[1] modified in-place
+
+  return 0 unless defined $size && $size > 0;
+  $offset = 0 unless defined $offset;
+
+  my $total = 0;
+  while ($total < $size)
+    {
+      my $rsz = sysread ($fh, $_[1], $size - $total, $offset + $total);
+      return $rsz if $rsz < 0; # error
+      last if $rsz == 0;       # eof
+      $total += $rsz;
+    }
+  return $total;
+}
+
+
+sub gzstart
+{
+  my @gzhdr = (join ("", map { chr(hex) } qw(0x1f 0x8b 0x08 0x00)),
+               join ("", map { chr(hex) } qw(0x1f 0x8b 0x08 0x08)));
+
+  for my $s (@gzhdr)
+    {
+      my $pos = index ($_[0], $s);
+      return $pos if $pos >= 0;
+    }
+
+  die  "Can't find start of compressed image\n";
+}
+
+sub uncompressed
+{
+  my $zdata = $_[0];
+  my $z = new IO::Uncompress::Gunzip \$zdata, { BinModeOut => 1,
+                                                Append => 1,
+                                              }
+          or die "IO::Uncompress::Gunzip failed: $GunzipError\n";
+
+  local $_;
+  while ($z->read ($_) > 0) {}  # read entire buffer
+  return $_;
+}
+
+sub ikcfg_zdata
+{
+  return $1 if $_[0] =~ /IKCFG_ST(.*)IKCFG_ED/s;
+  die "No embedded kernel configuration\n";
+}
+
+sub main
+{
+  local $_;
+  my ($filename) = @_;
+  my $fh = xopen ($filename, O_RDONLY);
+
+  xread ($fh, $_, -s $fh);
+  my $start = gzstart ($_);
+
+  my $raw = uncompressed (substr ($_, $start));
+  my $ikcfg_z = ikcfg_zdata ($raw);
+  $raw = uncompressed ($ikcfg_z);
+  print $raw;
+}
+
+main (@ARGV);
+
+# eof
