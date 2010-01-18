@@ -1,0 +1,189 @@
+#!/usr/bin/env perl
+# diskstat -- linux disk i/o stats (poor man's iostat)
+# Author: Noah Friedman <friedman@splode.com>
+# Created: 2010-01-18
+# Public domain
+
+# $Id$
+
+# Commentary:
+
+# Delay is hardcoded to 1s for now since the results are not presently
+# averaged over the time interval.
+
+# Code:
+
+$^W = 1; # enable warnings
+
+use strict;
+use Symbol;
+
+my $delay = 1;
+
+sub xopen
+{
+  my $file = shift;
+  my $fh = gensym;
+  open ($fh, $file) || die "$file: $!";
+  return $fh;
+}
+
+sub collect
+{
+  my ($fh) = shift;
+  my %want = map { $_ => undef } @_;
+  my %dev;
+  local $_;
+
+  seek ($fh, 0, 0);
+  while (<$fh>)
+    {
+      chomp;
+      s/^\s+//;
+      my @f = split (/\s+/, $_);
+      next unless (! %want || exists $want{$f[2]});
+      $dev{$f[2]} = \@f;
+    }
+  return \%dev;
+}
+
+# The /proc/diskstats file displays the I/O statistics of block
+# devices. Each line contains the following 14 fields:
+#
+#	 0 - major number
+#	 1 - minor mumber
+#	 2 - device name
+#	 3 - reads completed succesfully
+#	 4 - reads merged
+#	 5 - sectors read
+#	 6 - time spent reading (ms)  (cumulative for each read)
+#	 7 - writes completed
+#	 8 - writes merged
+#	 9 - sectors written
+#	10 - time spent writing (ms)
+#	11 - I/Os currently in progress
+#
+#		The only field that should go to zero. Incremented as
+#		requests are given to appropriate struct request_queue and
+#		decremented as they finish.
+#
+#	12 - time spent doing I/Os (ms)
+#	13 - weighted time spent doing I/Os (ms)
+#
+sub delta
+{
+  my ($old, $new) = @_;
+  my %result;
+
+  return $new unless $old;
+
+  map { my $dev = $_;
+        local *old = $old->{$dev};
+        local *new = $new->{$dev};
+        my @delta;
+
+        for (my $i = 0; $i < @::new; $i++)
+          {
+            if ($i ==  2 || $i == 11)
+              {
+                push @delta, $::new[$i];
+              }
+            else
+              {
+                push @delta, ($::new[$i] - $::old[$i]);
+              }
+          }
+        $result{$dev} = \@delta;
+      } keys %$new;
+
+  return \%result;
+}
+
+my @field_data =
+  ( 'Dev'    => { idx =>  2,  width => -9 },
+
+    '#Rd'    => { idx =>  3,  width =>  7 },
+#   '#Rmerg' => { idx =>  4,  width =>  7 },
+    'Rsect'  => { idx =>  5,  width =>  7 },
+    'Rms'    => { idx =>  6,  width =>  5 },
+
+    '#Wr'    => { idx =>  7,  width =>  7 },
+#   '#Wmerg' => { idx =>  8,  width =>  7 },
+    'Wsect'  => { idx =>  9,  width =>  7 },
+    'Wms'    => { idx => 10,  width =>  5 },
+
+#   '#IO'    => { idx => 11,  width =>  7 },
+#   'IOms'   => { idx => 12,  width =>  5 },
+    'IOms'   => { idx => 13,  width =>  5 },
+  );
+
+
+sub make_fmt_data
+{
+  my @name;
+  my @idx;
+  my @width;
+  for (my $i = 0; $i < @field_data; $i += 2)
+    {
+      push @name,  $field_data[$i];
+      push @idx,   $field_data[$i+1]->{idx};
+      push @width, $field_data[$i+1]->{width};
+    }
+
+  my $fmt = join ("  ", map { join ("", "%", $_, "s") } @width) . "\n";
+
+  return $fmt, \@name, \@idx;
+}
+
+my $linecount = 0;
+my $height    = 24;
+my ($fmt, @header, @fields);
+
+sub output
+{
+  my $data = shift;
+
+  unless ($fmt)
+    {
+      my @fmtinfo = make_fmt_data;
+      $fmt = $fmtinfo[0];
+      @header = @{$fmtinfo[1]};
+      @fields = @{$fmtinfo[2]};
+    }
+
+  my @keys = sort keys %$data;
+  if (@keys > 1)
+    {
+      printf ($fmt, @header);
+      map { printf ($fmt, @{$data->{$_}}[@fields])
+          } @keys;
+      print "\n";
+    }
+  else
+    {
+      if ($linecount % $height == 0)
+        {
+          printf ($fmt, @header);
+        }
+      map { printf ($fmt, @{$data->{$_}}[@fields]) } @keys;
+      $linecount++;
+    }
+}
+
+sub main
+{
+  my $fh = xopen ("/proc/diskstats");
+
+  my ($old, $new);
+  while (1)
+    {
+      $new = collect ($fh, @_);
+      output (delta ($old, $new)) if $old;
+      $old = $new;
+      sleep ($delay);
+    }
+}
+
+main (@ARGV);
+
+# eof
