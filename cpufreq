@@ -1,43 +1,112 @@
 #!/bin/sh
-# $Id: cpufreq,v 1.1 2009/05/17 05:50:53 friedman Exp $
+# $Id: cpufreq,v 1.2 2010/01/21 20:06:15 friedman Exp $
 
-# Display current (if no arg), or set new cpu frequency.
+# Display current frequency values, or set new thresholds
 
-sys=/sys/devices/system/cpu
+initialize()
+{
+  sys=/sys/devices/system/cpu
 
-# These are the min/max values which the core is capable of.
-#
-# The scaling governor can be programmed to use lessor or greater values
-# than these, e.g. the max frequency can be capped by writing a new value
-# to scaling_max_freq.  This script won't change the scaling maxima/minima,
-# so these two core values are just documented here for reference.
-#
-#read min_freq  < $sys/cpu0/cpufreq/cpuinfo_min_freq
-#read max_freq  < $sys/cpu0/cpufreq/cpuinfo_max_freq
+  # These are the min/max values which the core is capable of.
+  read min_freq  < $sys/cpu0/cpufreq/cpuinfo_min_freq
+  read max_freq  < $sys/cpu0/cpufreq/cpuinfo_max_freq
 
-read  cur_freq  < $sys/cpu0/cpufreq/scaling_cur_freq
-read  cur_min   < $sys/cpu0/cpufreq/scaling_min_freq
-read  cur_max   < $sys/cpu0/cpufreq/scaling_max_freq
-read  avail     < $sys/cpu0/cpufreq/scaling_available_frequencies
+  read cur_freq  < $sys/cpu0/cpufreq/scaling_cur_freq
+  read cur_min   < $sys/cpu0/cpufreq/scaling_min_freq
+  read cur_max   < $sys/cpu0/cpufreq/scaling_max_freq
+  read avail     < $sys/cpu0/cpufreq/scaling_available_frequencies
+}
 
-case $1 in
-  min* ) new=$cur_min ;;
-  max* ) new=$cur_max ;;
+display_all()
+{
+  echo cpuinfo_min_freq=$min_freq
+  echo cpuinfo_max_freq=$max_freq
+  echo
+  echo scaling_min_freq=$cur_min
+  echo scaling_max_freq=$cur_max
+  echo scaling_cur_freq=$cur_freq
+  echo
+  echo scaling_available=$avail
+}
 
-  avail* | help ) echo $avail    ; exit 0 ;;
-  ''            ) echo $cur_freq ; exit 0 ;;
+check_avail()
+{
+  case " $avail " in
+    *" $1 "* ) return 0 ;;
+    * ) echo Available frequencies: $avail 1>&2 ; exit 1 ;;
+  esac
+}
 
-  * ) # Test to see if specified frequency is allowed.
-      case " $avail " in
-        *" $1 "* ) new=$1 ;;
-        * ) echo Available frequencies: $avail 1>&2 ; exit 1 ;;
-      esac ;;
-esac
+set_freq()
+{
+  param=$1
+  new=$2
 
-for cpu in $sys/cpu*/cpufreq ; do
-  echo $new > $cpu/scaling_max_freq
-done
+  check_avail $new
 
-echo $new
+  for cpu in $sys/cpu*/cpufreq ; do
+    echo $new > $cpu/$param
+  done
+
+  echo $param=$new
+}
+
+min()
+{
+  case $1 in
+    ''  ) echo $cur_min ;;
+    min ) set_freq scaling_min_freq $min_freq ;;
+    max ) set_freq scaling_min_freq $max_freq ;;
+    *   ) set_freq scaling_min_freq $1        ;;
+  esac
+}
+
+max()
+{
+  case $1 in
+    ''  ) echo $cur_max ;;
+    min ) set_freq scaling_max_freq $min_freq ;;
+    max ) set_freq scaling_max_freq $max_freq ;;
+    *   ) set_freq scaling_max_freq $1        ;;
+  esac
+}
+
+usage()
+{
+  usage="Usage: ${0##*/} {options}
+
+Options are:
+-h, --help                   This help.
+-a, --all                    Display all cpu frequency parameters
+--min {freq}                 Display current min frequency, or set it.
+--max {freq}                 Display current max frequency, or set it.
+--avail                      Display available frequencies.
+
+The optional frequency parameter to \`--min' and \`--max' can be the
+literals \"min\" or \"max\" to indicate the minimum or maximum possible
+frequency, respectively."
+
+  echo "$usage"
+  exit 0
+}
+
+main()
+{
+  initialize
+
+  case $1:$2 in
+    -h:*  | --h*:*  ) usage          ;;
+    -a:*  | --all:* ) display_all    ;;
+
+    --avail*:*      ) echo $avail    ;;
+    :               ) echo $cur_freq ;;
+
+    --min:*         ) min $2         ;;
+    --max:*         ) max $2         ;;
+    *:              ) max $1         ;;
+  esac
+}
+
+main "$@"
 
 # eof
