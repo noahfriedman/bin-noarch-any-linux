@@ -1,9 +1,9 @@
 #!/bin/sh
-# $Id$
+# $Id: fix-run-mozilla.sh,v 1.1 2010/01/21 19:52:16 friedman Exp $
 
 find_scripts()
 {
-  rpm -ql "$@" | grep run-mozilla.sh
+  rpm -ql "$@" | egrep 'run-mozilla.sh|/lib.+/thunderbird$'
 }
 
 make_backup_file_name()
@@ -15,7 +15,11 @@ edit_script()
 {
   bup=`make_backup_file_name "$1"`
   cp -p "$1" "$bup"
-  sed -e 's=^\([ 	]*\)"\$prog\"=\1exec "$prog"=' "$bup" > "$1"
+
+  sed -e 's=^\([ 	]*\)\("\$prog\"\)=\1exec \2=' \
+      -e 's=^\([ 	]*\)\("\$dist_bin/run-mozilla.sh\"\)=\1exec \2=' \
+      "$bup" > "$1"
+
   if cmp -s "$bup" "$1" ; then
     mv "$bup" "$1"
     echo "$1 unchanged"
