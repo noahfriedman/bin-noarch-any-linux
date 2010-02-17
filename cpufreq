@@ -1,5 +1,5 @@
 #!/bin/sh
-# $Id: cpufreq,v 1.2 2010/01/21 20:06:15 friedman Exp $
+# $Id: cpufreq,v 1.3 2010/02/03 05:36:28 friedman Exp $
 
 # Display current frequency values, or set new thresholds
 
@@ -8,33 +8,36 @@ initialize()
   sys=/sys/devices/system/cpu
 
   # These are the min/max values which the core is capable of.
-  read min_freq  < $sys/cpu0/cpufreq/cpuinfo_min_freq
-  read max_freq  < $sys/cpu0/cpufreq/cpuinfo_max_freq
+  read cpuinfo_min_freq  < $sys/cpu0/cpufreq/cpuinfo_min_freq
+  read cpuinfo_max_freq  < $sys/cpu0/cpufreq/cpuinfo_max_freq
 
-  read cur_freq  < $sys/cpu0/cpufreq/scaling_cur_freq
-  read cur_min   < $sys/cpu0/cpufreq/scaling_min_freq
-  read cur_max   < $sys/cpu0/cpufreq/scaling_max_freq
-  read avail     < $sys/cpu0/cpufreq/scaling_available_frequencies
+  read scaling_min_freq  < $sys/cpu0/cpufreq/scaling_min_freq
+  read scaling_max_freq  < $sys/cpu0/cpufreq/scaling_max_freq
+  read scaling_cur_freq  < $sys/cpu0/cpufreq/scaling_cur_freq
+
+  read scaling_available_frequencies < $sys/cpu0/cpufreq/scaling_available_frequencies
 }
 
 display_all()
 {
-  echo cpuinfo_min_freq=$min_freq
-  echo cpuinfo_max_freq=$max_freq
+  echo cpuinfo_min_freq=$cpuinfo_min_freq
+  echo cpuinfo_max_freq=$cpuinfo_max_freq
   echo
-  echo scaling_min_freq=$cur_min
-  echo scaling_max_freq=$cur_max
-  echo scaling_cur_freq=$cur_freq
+  echo scaling_min_freq=$scaling_min_freq
+  echo scaling_max_freq=$scaling_max_freq
+  echo scaling_cur_freq=$scaling_cur_freq
   echo
-  echo scaling_available=$avail
+  echo scaling_available=$scaling_available_frequencies
 }
 
 check_avail()
 {
-  case " $avail " in
+  case " $scaling_available_frequencies " in
     *" $1 "* ) return 0 ;;
-    * ) echo Available frequencies: $avail 1>&2 ; exit 1 ;;
   esac
+
+  echo Available frequencies: $scaling_available_frequencies 1>&2
+  exit 1
 }
 
 set_freq()
@@ -45,7 +48,7 @@ set_freq()
   check_avail $new
 
   for cpu in $sys/cpu*/cpufreq ; do
-    echo $new > $cpu/$param
+    echo $new > $cpu/$param || return $?
   done
 
   echo $param=$new
@@ -54,9 +57,9 @@ set_freq()
 min()
 {
   case $1 in
-    ''  ) echo $cur_min ;;
-    min ) set_freq scaling_min_freq $min_freq ;;
-    max ) set_freq scaling_min_freq $max_freq ;;
+    ''  ) echo $scaling_min_freq ;;
+    min ) set_freq scaling_min_freq $cpuinfo_min_freq ;;
+    max ) set_freq scaling_min_freq $cpuinfo_max_freq ;;
     *   ) set_freq scaling_min_freq $1        ;;
   esac
 }
@@ -64,9 +67,9 @@ min()
 max()
 {
   case $1 in
-    ''  ) echo $cur_max ;;
-    min ) set_freq scaling_max_freq $min_freq ;;
-    max ) set_freq scaling_max_freq $max_freq ;;
+    ''  ) echo $scaling_max_freq ;;
+    min ) set_freq scaling_max_freq $cpuinfo_min_freq ;;
+    max ) set_freq scaling_max_freq $cpuinfo_max_freq ;;
     *   ) set_freq scaling_max_freq $1        ;;
   esac
 }
@@ -94,16 +97,21 @@ main()
 {
   initialize
 
+  case $1 in
+    --* ) x=${1#--} ; shift ; set x "$x" "$@" ; shift ;;
+    -*  ) x=${1#-}  ; shift ; set x "$x" "$@" ; shift ;;
+  esac
+
   case $1:$2 in
-    -h:*  | --h*:*  ) usage          ;;
-    -a:*  | --all:* ) display_all    ;;
+    h:*  | h*:*  ) usage       ;;
+    a:*  | all:* ) display_all ;;
 
-    --avail*:*      ) echo $avail    ;;
-    :               ) echo $cur_freq ;;
+    avail*:*     ) echo $scaling_available_frequencies ;;
+    :            ) echo $scaling_cur_freq ;;
 
-    --min:*         ) min $2         ;;
-    --max:*         ) max $2         ;;
-    *:              ) max $1         ;;
+    min:*        ) min $2 ;;
+    max:*        ) max $2 ;;
+    [0-9]*:      ) max $1 ;;
   esac
 }
 
