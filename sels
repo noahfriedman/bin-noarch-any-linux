@@ -1,0 +1,66 @@
+#!/usr/bin/env perl
+# $Id$
+
+$^W = 1; # enable warnings
+
+use lib "$ENV{HOME}/lib/perl";
+
+use NF::FmtCols;
+use Symbol;
+use strict;
+
+sub startproc
+{
+  my ($rfh, $wfh) = (gensym, gensym); # readhandle, writehandle
+  pipe ($rfh, $wfh);
+
+  my $pid = fork;
+  die "fork: $!\n" unless defined $pid;
+
+  if ($pid == 0) # child
+    {
+      open (*STDOUT{IO}, ">&" . fileno ($wfh));
+      close ($rfh);
+      close ($wfh);
+      local $SIG{__WARN__} = sub { 0 };
+      exec (@_) || die "exec: $_[0]: $!";
+    }
+  else
+    {
+      close ($wfh);
+      return $rfh;
+    }
+}
+
+sub main
+{
+  my @lscmd = qw(/bin/ls --lcontext);
+  push @lscmd, @_;
+
+  my $fh = startproc (@lscmd);
+  my @lines = map { chomp; $_; } <$fh>;
+  close ($fh);
+  wait;
+
+  my $fmt = NF::FmtCols->new
+    ( output_style            => 'plain',
+      numeric_regexp          => '^[-+]?[\d,.:]+%?$',
+      right_justify_numeric   => 1,
+      skip_leading_whitespace => 1,
+      format_empty_rows       => 0,
+    );
+
+  if ($lines[0] =~ '^total \d')
+    {
+      print $lines[0], "\n";
+      shift @lines;
+    }
+
+  $fmt->read_from_array (\@lines);
+  $fmt->output;
+
+}
+
+main (@ARGV);
+
+# eof
