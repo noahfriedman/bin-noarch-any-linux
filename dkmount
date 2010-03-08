@@ -1,0 +1,130 @@
+#!/bin/sh
+# $Id$
+
+# I hate devkit-disks.  It's far less programmable than the hal subsystem it replaced.
+# The gnome developers suck.
+
+set_defaults()
+{
+  DKMOUNT=${DKMOUNT-devkit-disks}
+  DKMOUNT_UID=${DKMOUNT_UID-${UID-`id -u`}}
+  DKMOUNT_GID=${DKMOUNT_GID-${GID-`id -g`}}
+  DKMOUNT_USER=${DKMOUNT_USER-${SUDO_USER-${LOGNAME-${USER-`whoami`}}}}
+}
+
+get_udi()
+{
+  bdev=`readlink --canonicalize "$1"`
+  hal-find-by-property --key block.device --string $bdev
+}
+
+get_udi_prop()
+{
+  case $1 in
+    /org/freedesktop/Hal/devices/* ) : ;;
+    * ) set x `get_udi "$1"` "$2"; shift ;;
+  esac
+
+  hal-get-property --udi "$1" --key "$2"
+}
+
+get_fstype()
+{
+  get_udi_prop "$1" volume.fstype
+}
+
+# TODO: validate mount options and filter those not allowed by the hal.
+get_allowed_mountopts()
+{
+  get_udi_prop "$1" volume.mount.valid_options
+}
+
+set_fsopts()
+{
+  _fsopts()
+  {
+    fsopts=$1
+    shift
+    for o in "$@"; do
+      fsopts=$fsopts,$o
+    done
+  }
+
+  case $fstype:$fsopts in
+    vfat: | fat: | msdos: ) _fsopts       uid=$DKMOUNT_UID \
+                                          gid=$DKMOUNT_GID \
+                                        umask=000         \
+                                    iocharset=iso8859-1   \
+                                    shortname=mixed      ;;
+
+    hfs: | hfsplus:       ) _fsopts       uid=$DKMOUNT_UID \
+                                          gid=$DKMOUNT_GID \
+                                        umask=000         \
+                                         exec            ;;
+
+    xfs: | ext[234]:      ) _fsopts noatime ;;
+
+    cifs:                 ) _fsopts      user=${DKMOUNT_USER} \
+                                          uid=$DKMOUNT_UID    \
+                                          gid=$DKMOUNT_GID    \
+                                    file_mode=0777           \
+                                     dir_mode=02777          \
+                                    iocharset=iso8859-1      \
+                                       noperm                \
+                                       nocase                \
+                                    serverino                \
+                                   user_xattr               ;;
+  esac
+}
+
+main()
+{
+  set_defaults
+
+  fstype= fsopts= mount=--mount
+  while :; do
+    case $1 in
+      -t ) fstype=$2         ; shift 2 ;;
+      -o ) fsopts=$2         ; shift 2 ;;
+      -u ) mount=--unmount   ; shift   ;;
+       * ) break ;;
+    esac
+  done
+
+  case $# in
+    1 ) device=$1 mountpoint=   ; shift   ;;
+    2 ) device=$1 mountpoint=$2 ; shift 2 ;;
+  esac
+
+  case $device in
+    /* ) ;;
+    *  ) device=`find /dev/disk -path "*/$device" -print` ;;
+  esac
+
+  udi=`get_udi "$device"`
+
+  case $fstype in
+    '' ) fstype=`get_fstype "$udi"` ;;
+  esac
+
+  set_fsopts
+
+  case  ${fstype:+set} in set ) set x "$@" --mount-fstype  "$fstype"  ; shift ;; esac
+  case  ${fsopts:+set} in set ) set x "$@" --mount-options "$fsopts"  ; shift ;; esac
+
+  devalias=${device##*/}
+  case $mountpoint in
+    '' ) mountpoint=$devalias ;;
+  esac
+
+  set fnord \
+      $DKMOUNT $mount $device "$@"
+  shift
+
+  echo + "$@"
+  exec "$@"
+}
+
+main "$@"
+
+# eof
