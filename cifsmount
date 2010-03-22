@@ -1,5 +1,5 @@
 #!/bin/bash
-# $Id: cifsmount,v 1.1 2006/09/18 23:24:25 friedman Exp $
+# $Id: cifsmount,v 1.2 2009/04/08 00:30:51 friedman Exp $
 
 for cifs_var in ${!CIFSMOUNT_*}; do
   var=`echo ${cifs_var#CIFSMOUNT_} | tr '[A-Z]' '[a-z]'`
@@ -56,6 +56,7 @@ for var in ${!smb_*}; do
 done
 options=${options#,}
 
+exitstat=0
 for share in ${1+"$@"}; do
   case $share in
     /s/* ) share=`echo "$share" | sed -e 's=^/s/=//='`  ;;
@@ -66,20 +67,7 @@ for share in ${1+"$@"}; do
   mntpoint=`echo "$share" | sed -e 's=^//=/s/='`
   test -d "$mntpoint" || mkdir -p "$mntpoint"
 
-  errout=`mount.cifs "$share" "$mntpoint" -o "$options"`
-
-  case $errout in
-    *"Could not umount $mntpoint:"* )
-      {
-        echo "$errout"
-        if umount "$mntpoint"; then
-          echo
-          echo "cifsmount: unmounted $mntpoint"
-        fi
-      } 1>&2
-      exitstat=1
-     ;;
-  esac
+  mount.cifs "$share" "$mntpoint" -o "$options" || exitstat=$?
 done
 
 find /s -xdev -type d -print0 | sort -rz | xargs -0 rmdir 2> /dev/null
