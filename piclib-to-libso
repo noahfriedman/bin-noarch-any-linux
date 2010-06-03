@@ -1,0 +1,25 @@
+#!/bin/sh
+# $Id$
+
+libso=$1
+shift
+
+staticlibs=
+for arg in "$@"; do
+  case $arg in
+    -* ) break ;;
+  esac
+
+  staticlibs="$staticlibs $arg"
+  shift
+done
+
+exec ${CC-gcc} \
+    -shared \
+    -o $libso \
+    -Wl,-whole-archive \
+    $staticlibs \
+    -Wl,-no-whole-archive \
+    "$@"
+
+# eof
