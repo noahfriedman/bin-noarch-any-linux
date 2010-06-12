@@ -1,13 +1,15 @@
 #!/bin/bash
-# $Id$
+# $Id: screen,v 1.1 2008/10/23 07:50:50 friedman Exp $
 
 SHLVL=0
 LC_CTYPE=en_US.UTF-8
 export SHLVL LC_CTYPE
 
-if [ -x /opt/lude/bin/screen ]; then
-  exec -a screen /opt/lude/bin/screen "$@"
-fi
+for screen in /opt/lude/bin/screen /usr/bin/screen ; do
+  if [ -x $screen ]; then
+    exec -a screen $screen "$@"
+  fi
+done
 
 exec run-next "$0" "$@"
 
