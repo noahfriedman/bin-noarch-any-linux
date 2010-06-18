@@ -1,0 +1,13 @@
+#!/bin/sh
+# $Id$
+
+ulimit -c 0     # blocks
+ulimit -s 1024  # kbytes
+
+trap '' 1  # nohup
+
+exec nice -n 19 \
+     ionice -c 3 \
+     ${1+"$@"}
+
+# eof
