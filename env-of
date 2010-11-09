@@ -4,7 +4,7 @@
 # Created: 2008-01-10
 # Public domain
 
-# $Id: env-of,v 1.2 2009/02/01 06:57:58 friedman Exp $
+# $Id: env-of,v 1.3 2010/02/18 06:48:42 friedman Exp $
 
 # Commentary:
 # Code:
@@ -179,7 +179,7 @@ sub parse_options
 sub main
 {
   parse_options (\@_);
-  my $procname = shift;
+  my $procname = @_ ? shift : $$;
   my @varnames = @_;
 
   my @pid = ($procname =~ /^\d+$/
