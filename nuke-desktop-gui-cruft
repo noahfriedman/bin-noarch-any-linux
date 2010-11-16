@@ -1,0 +1,20 @@
+#!/bin/sh
+# $Id$
+
+procs='
+  gvfsd
+  gvfsd-metadata
+  gvfs-gdu-volume-monitor
+  gvfs-gphoto2-volume-monitor
+  gnome-keyring-daemon
+  notification-daemon
+
+  idn
+  aspell
+'
+
+for proc in $procs; do
+  mkill $proc;
+done
+
+# eof
