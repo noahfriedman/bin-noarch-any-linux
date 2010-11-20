@@ -1,12 +1,15 @@
 #!/bin/sh
-# $Id$
+# $Id: nuke-desktop-gui-cruft,v 1.1 2010/11/16 01:29:48 friedman Exp $
 
 procs='
   gvfsd
   gvfsd-metadata
+  gvfs-afc-volume-monitor
   gvfs-gdu-volume-monitor
   gvfs-gphoto2-volume-monitor
   gnome-keyring-daemon
+  gnome-settings-daemon
+  gnome-screensaver
   notification-daemon
 
   idn
