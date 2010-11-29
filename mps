@@ -1,5 +1,5 @@
 #!/usr/bin/env perl
-# $Id: mps,v 1.3 2010/02/22 11:54:58 friedman Exp $
+# $Id: mps,v 1.4 2010/03/02 21:08:25 friedman Exp $
 
 $^W = 1; # enable warnings
 
@@ -10,22 +10,22 @@ use Symbol;
 use strict;
 
 my %field =
-  ( 'user'    => { order =>  1, rjustify => 1, },
-    'pid'     => { order =>  2, rjustify => 1, },
-    'ppid'    => { order =>  3, rjustify => 1, },
-    'nlwp=#T' => { order =>  4, rjustify => 1, },
-    '%cpu'    => { order =>  5, rjustify => 1, },
-    '%mem'    => { order =>  6, rjustify => 1, },
-    'ni'      => { order =>  7, rjustify => 1, },
-    'vsz'     => { order =>  8, rjustify => 1, },
-    'rss'     => { order =>  9, rjustify => 0, },
-    'tty=TTY' => { order => 10, rjustify => 0, },
-    'stat=ST' => { order => 11, rjustify => 1, },
-    'cpuid=P' => { order => 12, rjustify => 0, },
-    'stime'   => { order => 13, rjustify => 1, },
-    'bsdtime' => { order => 14, rjustify => 0, },
-    'context' => { order => 15, rjustify => 0, },
-    'args'    => { order => 16, rjustify => 0, },
+  ( 'user'    => { order =>  0, rjustify => 1, },
+    'pid'     => { order =>  1, rjustify => 1, },
+    'ppid'    => { order =>  2, rjustify => 1, },
+    'nlwp=#T' => { order =>  3, rjustify => 1, },
+    '%cpu'    => { order =>  4, rjustify => 1, },
+    '%mem'    => { order =>  5, rjustify => 1, },
+    'ni'      => { order =>  6, rjustify => 1, },
+    'vsz'     => { order =>  7, rjustify => 1, },
+    'rss'     => { order =>  8, rjustify => 1, },
+    'tty=TTY' => { order =>  9, rjustify => 0, },
+    'stat=ST' => { order => 10, rjustify => 0, },
+    'cpuid=P' => { order => 11, rjustify => 1, },
+    'stime'   => { order => 12, rjustify => 1, },
+    'bsdtime' => { order => 13, rjustify => 0, },
+    'context' => { order => 14, rjustify => 0, },
+    'args'    => { order => 15, rjustify => 0, },
   );
 
 sub field_names
@@ -35,7 +35,11 @@ sub field_names
 
 sub field_rjustify
 {
-  map { $field{$_}->{rjustify} } field_names();
+  my @rj;
+  map { push @rj, $field{$_}->{order}
+          if $field{$_}->{rjustify};
+      } field_names();
+  return @rj;
 }
 
 sub startproc
@@ -82,6 +86,7 @@ sub main
 
   my $fmt = NF::FmtCols->new;
   $fmt->output_style ('plain');
+  $fmt->skip_leading_whitespace (1);
   $fmt->add_right_justify (field_rjustify());
   $fmt->num_fields (scalar keys %field);
   $fmt->read_from_array (\@lines);
