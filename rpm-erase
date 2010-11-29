@@ -1,0 +1,17 @@
+#!/bin/sh
+# $Id$
+
+size=$((10 * 1024 * 1024))
+
+case $* in
+  *"*"* ) verbose=--verbose ;;
+esac
+
+rpm --qf "%{NAME}\n" --nodigest --nosignature -qa "$@" \
+ | xargs $verbose \
+    --no-run-if-empty \
+    --max-args  $size \
+    --max-chars $size \
+    rpm --erase --allmatches
+
+# eof
