@@ -1,0 +1,196 @@
+#!/usr/bin/perl
+# mkill --- kill processes by name
+# Author: Noah Friedman <friedman@splode.com>
+# Created: 2008-01-10
+# Public domain
+
+# $Id$
+
+# Commentary:
+# Code:
+
+use strict;
+use Symbol;
+
+$^W = 1; # enable warnings
+
+(my $progname = $0) =~ s=^.*/==;
+
+sub xcat
+{
+  my $fh = gensym;
+  local $_;
+  open ($fh, $_[0]) || return;
+
+  if (-s $fh)
+    {
+      sysread ($fh, $_, -s $fh, 0);  # -s returns size
+    }
+  else
+    {
+      my $offset = 0;
+      while (1)
+        {
+          my $amt = sysread ($fh, $_, 4096, $offset);
+          last unless $amt;
+          $offset += $amt;
+        }
+    }
+
+  close ($fh);
+  return $_;
+}
+
+sub basename
+{
+  local $_ = shift;
+  s=.*/==;
+  return $_;
+}
+
+
+sub pids
+{
+  my $dfh = gensym;
+  opendir ($dfh, "/proc") || return ;
+  my @pids = sort { $a <=> $b } grep { /^\d+$/ } readdir $dfh;
+  closedir ($dfh);
+
+  if (0 && $> != 0)
+    {
+      # Filter out any processes not run by us
+      return grep { uid ($_) == $> } @pids;
+    }
+  return @pids;
+}
+
+sub cmdline
+{
+  my $pid = shift;
+  my $cmdline = xcat ("/proc/$pid/cmdline");
+  return unless defined $cmdline;
+  return split (/\0/, $cmdline) unless $cmdline eq "";
+  return stat_name ($pid);
+}
+
+sub exe
+{
+  my $pid = shift;
+  my $exe = readlink ("/proc/$pid/exe");
+  return $exe;
+}
+
+my %stat_data;
+sub stat_data
+{
+  my $pid = shift;
+  return $stat_data{$pid} if exists $stat_data{$pid};
+  my $stat = xcat ("/proc/$pid/status");
+  return unless defined $stat;
+  $stat_data{$pid} = $stat;
+  return $stat;
+}
+
+sub stat_name
+{
+  my $stat = stat_data ($_[0]);
+  return unless defined $stat;
+  return $1 if $stat =~ m|^Name:\s+(.*)|m;
+}
+
+sub uid
+{
+  my $stat = stat_data ($_[0]);
+  return unless defined $stat;
+  return $1 if $stat =~ m|^Uid:\s+(\d+)|m;
+  return 0;
+}
+
+sub pidof
+{
+  my ($name) = @_;
+  my $re = ($name =~ m|^/(.*)/$| ? $1 : undef);
+
+  my @allpids = pids ();
+  my @pid;
+  for my $p (@allpids)
+    {
+      my @cmdline = cmdline ($p);
+      if (@cmdline
+          && ($cmdline[0] eq $name
+              || basename ($cmdline[0]) eq $name
+              || (defined $re && $cmdline[0] =~ $re)))
+        {
+          push @pid, $p;
+          next;
+        }
+
+      my $exe = exe ($p);
+      if (defined $exe
+          && ($exe eq $name
+              || basename ($exe) eq $name
+              || (defined $re && $exe =~ $re)))
+        {
+          push @pid, $p;
+          next;
+        }
+    }
+
+  return @pid;
+}
+
+sub main
+{
+  my $signal = 15;
+
+  if ($_[0] =~ /^-(\d+|(?:sig)?[a-z]{3})$/i)
+    {
+      $signal = uc ($1);
+      shift;
+    }
+
+  unless (@_ == 1)
+    {
+
+      print STDERR "Usage: $progname -signal procname\n";
+      print STDERR "   or  $progname -signal /regex/\n";
+      exit (1);
+    }
+
+  my $procname = shift;
+  my @pid = ($procname =~ /^\d+$/
+             ? $procname
+             : pidof ($procname));
+  unless (@pid)
+    {
+      print STDERR "$progname: $procname: Cannot find matching process\n";
+      exit 1;
+    }
+
+  if ($> == 0)
+    {
+      map { my $cmdline = join (" ", cmdline ($_));
+            my $user = getpwuid (uid ($_));
+            printf ("%d %s: %s\n", $_, $user, $cmdline);
+          } @pid;
+    }
+  else
+    {
+      map { my $cmdline = join (" ", cmdline ($_));
+            printf ("%d: %s\n", $_, $cmdline);
+          } @pid;
+    }
+
+  my $exitstat = 0;
+  map { unless (kill ($signal, $_))
+          {
+            print STDERR "kill: $_: $!\n";
+            $exitstat = 1;
+          }
+      } @pid;
+  exit ($exitstat);
+}
+
+main (@ARGV);
+
+# eof
