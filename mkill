@@ -4,7 +4,7 @@
 # Created: 2008-01-10
 # Public domain
 
-# $Id$
+# $Id: mkill,v 1.1 2010/12/01 08:37:15 friedman Exp $
 
 # Commentary:
 # Code:
@@ -53,10 +53,10 @@ sub pids
 {
   my $dfh = gensym;
   opendir ($dfh, "/proc") || return ;
-  my @pids = sort { $a <=> $b } grep { /^\d+$/ } readdir $dfh;
+  my @pids = sort { $a <=> $b } grep { /^\d+$/ && $_ != $$ } readdir $dfh;
   closedir ($dfh);
 
-  if (0 && $> != 0)
+  if ($> != 0)
     {
       # Filter out any processes not run by us
       return grep { uid ($_) == $> } @pids;
@@ -134,8 +134,15 @@ sub pidof
           push @pid, $p;
           next;
         }
-    }
 
+      my $stat_name = stat_name ($p);
+      if (defined $stat_name
+          && ($stat_name eq $name
+              || (defined $re && $stat_name =~ $re)))
+        {
+          push @pid, $p;
+        }
+    }
   return @pid;
 }
 
