@@ -4,7 +4,7 @@
 # Created: 2008-01-10
 # Public domain
 
-# $Id: mkill,v 1.1 2010/12/01 08:37:15 friedman Exp $
+# $Id: mkill,v 1.2 2010/12/01 08:42:27 friedman Exp $
 
 # Commentary:
 # Code:
@@ -116,32 +116,15 @@ sub pidof
   for my $p (@allpids)
     {
       my @cmdline = cmdline ($p);
-      if (@cmdline
-          && ($cmdline[0] eq $name
-              || basename ($cmdline[0]) eq $name
-              || (defined $re && $cmdline[0] =~ $re)))
-        {
-          push @pid, $p;
-          next;
-        }
-
-      my $exe = exe ($p);
-      if (defined $exe
-          && ($exe eq $name
-              || basename ($exe) eq $name
-              || (defined $re && $exe =~ $re)))
-        {
-          push @pid, $p;
-          next;
-        }
-
-      my $stat_name = stat_name ($p);
-      if (defined $stat_name
-          && ($stat_name eq $name
-              || (defined $re && $stat_name =~ $re)))
-        {
-          push @pid, $p;
-        }
+      map { if (defined $_
+                && ($_ eq $name
+                    || basename ($_) eq $name
+                    || (defined $re && $_ =~ $re)))
+              {
+                push @pid, $p;
+                next;
+              }
+          } (@cmdline[0,1,2], exe($p), stat_name($p));
     }
   return @pid;
 }
@@ -165,13 +148,11 @@ sub main
     }
 
   my $procname = shift;
-  my @pid = ($procname =~ /^\d+$/
-             ? $procname
-             : pidof ($procname));
+  my @pid = pidof ($procname);
   unless (@pid)
     {
-      print STDERR "$progname: $procname: Cannot find matching process\n";
-      exit 1;
+      #print STDERR "$progname: $procname: Cannot find matching process\n";
+      exit (1);
     }
 
   if ($> == 0)
