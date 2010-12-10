@@ -1,0 +1,76 @@
+#!/usr/bin/perl
+
+use strict;
+use Symbol;
+
+$^W = 1; # enable warnings
+
+my $tp_acpi_dir = "/sys/devices/platform/thinkpad_acpi";
+
+# Data lifted from linux thinkpad_acpi.c module
+my %tp_acpi_hotkeyscan =
+  ( fnf1        =>  0,
+    fnf2        =>  1,
+    fnf3        =>  2,
+    fnf4        =>  3,
+    fnf5        =>  4,
+    fnf6        =>  5,
+    fnf7        =>  6,
+    fnf8        =>  7,
+    fnf9        =>  8,
+    fnf10       =>  9,
+    fnf11       => 10,
+    fnf12       => 11,
+    fnbackspace => 12,
+    fninsert    => 13,
+    fndelete    => 14,
+    fnhome      => 15,
+    fnend       => 16,
+    fnpageup    => 17,
+    fnpagedown  => 18,
+    fnspace     => 19,
+    volumeup    => 20,
+    volumedown  => 21,
+    mute        => 22,
+    thinkpad    => 23,
+  );
+
+# Positions of some of the keys in hotkey masks
+my %tp_acpi_hkey_mask =
+  ( dispswtch => 1 << $tp_acpi_hotkeyscan{fnf7},
+    dispxpand => 1 << $tp_acpi_hotkeyscan{fnf8},
+    hibernate => 1 << $tp_acpi_hotkeyscan{fnf12},
+    brghtup   => 1 << $tp_acpi_hotkeyscan{fnhome},
+    brghtdwn  => 1 << $tp_acpi_hotkeyscan{fnend},
+    thnklght  => 1 << $tp_acpi_hotkeyscan{fnpageup},
+    zoom      => 1 << $tp_acpi_hotkeyscan{fnspace},
+    volup     => 1 << $tp_acpi_hotkeyscan{volumeup},
+    voldwn    => 1 << $tp_acpi_hotkeyscan{volumedown},
+    mute      => 1 << $tp_acpi_hotkeyscan{mute},
+    thinkpad  => 1 << $tp_acpi_hotkeyscan{thinkpad},
+  );
+
+sub tp_acpi_get
+{
+  my ($filename) = @_;
+  my $fh = gensym;
+  die unless open ($fh, "< $tp_acpi_dir/$filename");
+  local $_ = join ("", <$fh>);
+  close ($fh);
+  s/[\r\n]//g;
+  return $_;
+}
+
+sub main
+{
+  my $recommended_mask = hex (tp_acpi_get ("hotkey_recommended_mask"));
+
+  my $x = 0;
+  map { $x |= $tp_acpi_hkey_mask{$_} } keys %tp_acpi_hkey_mask;
+
+  printf "0x%x\n", $recommended_mask ^ $x;
+}
+
+main (@ARGV);
+
+# eof
