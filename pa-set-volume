@@ -1,0 +1,46 @@
+#!/bin/sh
+# $Id$
+
+max=65536
+
+set_volume()
+{
+  # Default 50% if not specified
+  pct=${1-50}
+  vol=$(($max * $pct / 100))
+
+  if pactl set-sink-volume 0 $vol; then
+    echo "New playback volume $pct% ($vol in [0,$max])"
+  fi
+}
+
+get_volume()
+{
+  pactl list |
+  sed -n \
+      -e '/^Sink #0/!d
+          :l
+          /.*Volume: 0: \([0-9]*\)%.*/!{
+            n
+            b l
+          }
+          s//\1/p
+          q
+         '
+}
+
+main()
+{
+  curpct=`get_volume`
+  curvol=$(($max * $curpct / 100))
+  if [ $# -eq 0 ]; then
+    echo "Current playback volume $curpct% ($curvol in [0,$max])"
+  else
+    echo "Old playback volume $curpct% ($curvol in [0,$max])"
+    set_volume "$@"
+  fi
+}
+
+main "$@"
+
+# eof
