@@ -1,15 +1,35 @@
 #!/bin/sh
-# $Id: nuke-desktop-gui-cruft,v 1.1 2010/11/16 01:29:48 friedman Exp $
+# $Id: nuke-desktop-gui-cruft,v 1.2 2010/11/20 22:38:50 friedman Exp $
 
 procs='
   gvfsd
+  gvfsd-archive
+  gvfsd-burn
+  gvfsd-cdda
+  gvfsd-computer
+  gvfsd-dav
+  gvfsd-dnssd
+  gvfsd-ftp
+  gvfsd-gphoto2
+  gvfsd-http
+  gvfsd-localtest
   gvfsd-metadata
+  gvfsd-network
+  gvfsd-obexftp
+  gvfsd-sftp
+  gvfsd-smb
+  gvfsd-smb-browse
+  gvfsd-trash
+
   gvfs-afc-volume-monitor
   gvfs-gdu-volume-monitor
   gvfs-gphoto2-volume-monitor
+
+  gnome-dvb-daemon
   gnome-keyring-daemon
-  gnome-settings-daemon
   gnome-screensaver
+  gnome-settings-daemon
+  gnome-vfs-daemon
   notification-daemon
 
   idn
