@@ -4,7 +4,7 @@
 # Created: 2008-01-10
 # Public domain
 
-# $Id: mkill,v 1.3 2010/12/01 09:05:26 friedman Exp $
+# $Id: mkill,v 1.4 2010/12/10 07:54:36 friedman Exp $
 
 # Commentary:
 # Code:
@@ -139,43 +139,47 @@ sub main
       shift;
     }
 
-  unless (@_ == 1)
+  unless (@_)
     {
 
-      print STDERR "Usage: $progname -signal procname\n";
-      print STDERR "   or  $progname -signal /regex/\n";
+      print STDERR "Usage: $progname -signal procname ...\n";
+      print STDERR "   or  $progname -signal /regex/ ...\n";
       exit (1);
-    }
-
-  my $procname = shift;
-  my @pid = pidof ($procname);
-  unless (@pid)
-    {
-      #print STDERR "$progname: $procname: Cannot find matching process\n";
-      exit (1);
-    }
-
-  if ($> == 0)
-    {
-      map { my $cmdline = join (" ", cmdline ($_));
-            my $user = getpwuid (uid ($_));
-            printf ("%d %s: %s\n", $_, $user, $cmdline);
-          } @pid;
-    }
-  else
-    {
-      map { my $cmdline = join (" ", cmdline ($_));
-            printf ("%d: %s\n", $_, $cmdline);
-          } @pid;
     }
 
   my $exitstat = 0;
-  map { unless (kill ($signal, $_))
-          {
-            print STDERR "kill: $_: $!\n";
-            $exitstat = 1;
-          }
-      } @pid;
+
+  for my $procname (@_)
+    {
+      my @pid = pidof ($procname);
+      unless (@pid)
+        {
+          #print STDERR "$progname: $procname: Cannot find matching process\n";
+          #$exitstat = 1;
+          next;
+        }
+
+      if ($> == 0)
+        {
+          map { my $cmdline = join (" ", cmdline ($_));
+                my $user = getpwuid (uid ($_));
+                printf ("%d %s: %s\n", $_, $user, $cmdline);
+              } @pid;
+        }
+      else
+        {
+          map { my $cmdline = join (" ", cmdline ($_));
+                printf ("%d: %s\n", $_, $cmdline);
+              } @pid;
+        }
+
+      map { unless (kill ($signal, $_))
+              {
+                print STDERR "kill: $_: $!\n";
+                $exitstat = 1;
+              }
+          } @pid;
+    }
   exit ($exitstat);
 }
 
