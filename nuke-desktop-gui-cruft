@@ -1,5 +1,5 @@
 #!/bin/sh
-# $Id: nuke-desktop-gui-cruft,v 1.4 2011/01/04 13:09:29 friedman Exp $
+# $Id: nuke-desktop-gui-cruft,v 1.5 2011/02/08 00:53:07 friedman Exp $
 
 procs='
   /^gvfsd/
@@ -7,6 +7,7 @@ procs='
   /gnome-.*-daemon/
   gnome-screensaver
   notification-daemon
+  dconf-service
   idn
   aspell
 '
