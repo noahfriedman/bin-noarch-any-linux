@@ -1,0 +1,35 @@
+#!/bin/sh
+# $Id$
+#
+# eth0-fix	detect changed MAC for eth0
+#
+# chkconfig: 2345 01 99
+# description:	detects changed MAC for eth0 and reconfigures
+
+start()
+{
+  if [ -e /sys/class/net/eth1 ] && ! [ -e /sys/class/net/eth0 ]; then
+    rules=/etc/udev/rules.d/70-persistent-net.rules
+    omac=`sed -ne '/eth0/s/.*{address}=="\([^"]*\)".*/\1/p' $rules`
+    read nmac < /sys/class/net/eth1/address
+
+    logger -p daemon.info -t ${0##*/} -i -s \
+        "Primary ethernet MAC has changed from $omac to $nmac; renaming eth1 to eth0."
+
+    sed -e '/eth0/s/\({address}=="\)[^"]*/\1'"$nmac/" \
+        -e '/eth1/d' \
+        -e '/# PCI device/d' \
+        $rules > $rules.tmp$$ &&
+    cat $rules.tmp$$ > $rules &&
+    rm -f $rules.tmp$$
+
+    ip link set eth1 name eth0
+    udevadm control --reload-rules
+  fi
+}
+
+case $1 in
+  start | '' ) start ;;
+esac
+
+# eof
