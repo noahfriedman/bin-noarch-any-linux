@@ -1,5 +1,5 @@
 #!/bin/bash
-# $Id: cifsmount,v 1.2 2009/04/08 00:30:51 friedman Exp $
+# $Id: cifsmount,v 1.3 2010/03/22 01:03:56 friedman Exp $
 
 for cifs_var in ${!CIFSMOUNT_*}; do
   var=`echo ${cifs_var#CIFSMOUNT_} | tr '[A-Z]' '[a-z]'`
@@ -16,8 +16,7 @@ smb_uid=${smb_uid-$user}
 smb_gid=${smb_gid-`id -g`}
 smb_file_mode=0777
 smb_dir_mode=0777
-smb_iocharset=${smb_iocharset-'iso8859-1'}
-
+smb_iocharset=${smb_iocharset-'utf-8'}
 #smb_sockopt=${smb_sockopt-'IPTOS_LOWDELAY TCP_NODELAY SO_SNDBUF=65535 SO_RCVBUF=65535'}
 
 case `id -u` in
