@@ -1,8 +1,10 @@
 #!/usr/bin/env perl
-# $Id: mps,v 1.5 2010/11/29 09:01:03 friedman Exp $
+# $Id: mps,v 1.6 2011/10/10 04:06:59 friedman Exp $
 
 $^W = 1; # enable warnings
 
+use FindBin;
+use lib "$FindBin::Bin/../../../lib/perl";
 use lib "$ENV{HOME}/lib/perl";
 
 use NF::FmtCols;

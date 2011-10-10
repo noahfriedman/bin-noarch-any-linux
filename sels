@@ -1,8 +1,10 @@
 #!/usr/bin/env perl
-# $Id$
+# $Id: sels,v 1.1 2010/02/24 02:09:14 friedman Exp $
 
 $^W = 1; # enable warnings
 
+use FindBin;
+use lib "$FindBin::Bin/../../../lib/perl";
 use lib "$ENV{HOME}/lib/perl";
 
 use NF::FmtCols;
@@ -45,7 +47,7 @@ sub main
   my $fmt = NF::FmtCols->new
     ( output_style            => 'plain',
       numeric_regexp          => '^[-+]?[\d,.:]+%?$',
-      right_justify_numeric   => 1,
+      right_justify_numeric_p => 1,
       skip_leading_whitespace => 1,
       format_empty_rows       => 0,
     );
