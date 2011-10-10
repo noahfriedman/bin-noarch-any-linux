@@ -1,5 +1,5 @@
 #!/bin/sh
-# $Id: firefox,v 1.5 2008/11/09 00:23:41 friedman Exp $
+# $Id: firefox,v 1.6 2009/01/13 21:23:26 friedman Exp $
 
 # Use the `linux32' wrapper on x86_64 machines to insure we run the 32-bit
 # version of firefox.  This is for the sake of getting common plugins such
@@ -26,9 +26,15 @@ case $numscreens in
   1 ) exec $linux32 "$prog" "$@" ;;
 esac
 
-version=`$linux32 "$prog" -version \
-           | sed -e 's/^.*Firefox \([0-9]*\)\.\([0-9]*\).*/\1\2/' \
-                 -e '/^\(.\)0/s//\1/'`
+#version=`$linux32 "$prog" -version \
+#           | sed -e 's/^.*Firefox \([0-9]*\)\.\([0-9]*\).*/\1\2/' \
+#                 -e '/^\(.\)0/s//\1/'`
+#
+# 2011-10-10 For now, since firefox version numbers are shooting up faster
+# than a freshly minted heroin addict, don't bother versioning profiles
+# anymore.
+version=
+
 case $DISPLAY in
   :*.0 ) set fnord -P firefox$version     "$@"; shift ;;
   :*.1 ) set fnord -P firefox$version.2nd "$@"; shift ;;
