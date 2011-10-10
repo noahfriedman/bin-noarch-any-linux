@@ -1,5 +1,5 @@
 #!/usr/bin/env perl
-# $Id: mps,v 1.4 2010/03/02 21:08:25 friedman Exp $
+# $Id: mps,v 1.5 2010/11/29 09:01:03 friedman Exp $
 
 $^W = 1; # enable warnings
 
@@ -10,7 +10,7 @@ use Symbol;
 use strict;
 
 my %field =
-  ( 'user'    => { order =>  0, rjustify => 1, },
+  ( 'user'    => { order =>  0, rjustify => 0, },
     'pid'     => { order =>  1, rjustify => 1, },
     'ppid'    => { order =>  2, rjustify => 1, },
     'nlwp=#T' => { order =>  3, rjustify => 1, },
@@ -23,7 +23,7 @@ my %field =
     'stat=ST' => { order => 10, rjustify => 0, },
     'cpuid=P' => { order => 11, rjustify => 1, },
     'stime'   => { order => 12, rjustify => 1, },
-    'bsdtime' => { order => 13, rjustify => 0, },
+    'bsdtime' => { order => 13, rjustify => 1, },
     'context' => { order => 14, rjustify => 0, },
     'args'    => { order => 15, rjustify => 0, },
   );
@@ -35,11 +35,7 @@ sub field_names
 
 sub field_rjustify
 {
-  my @rj;
-  map { push @rj, $field{$_}->{order}
-          if $field{$_}->{rjustify};
-      } field_names();
-  return @rj;
+  map { $field{$_}->{order} => $field{$_}->{rjustify} } keys %field;
 }
 
 sub startproc
@@ -84,11 +80,12 @@ sub main
   close ($fh);
   wait;
 
-  my $fmt = NF::FmtCols->new;
-  $fmt->output_style ('plain');
-  $fmt->skip_leading_whitespace (1);
-  $fmt->add_right_justify (field_rjustify());
-  $fmt->num_fields (scalar keys %field);
+  my $fmt = NF::FmtCols->new
+    ( output_style            => 'plain',
+      skip_leading_whitespace => 1,
+      num_fields              => scalar keys %field,
+      right_justify           => { field_rjustify() },
+    );
   $fmt->read_from_array (\@lines);
   $fmt->output;
 }
