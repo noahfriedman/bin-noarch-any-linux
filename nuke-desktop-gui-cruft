@@ -1,11 +1,12 @@
 #!/bin/sh
-# $Id: nuke-desktop-gui-cruft,v 1.5 2011/02/08 00:53:07 friedman Exp $
+# $Id: nuke-desktop-gui-cruft,v 1.6 2011/07/24 03:46:18 friedman Exp $
 
 procs='
   /^gvfsd/
   /^gvfs-/
   /gnome-.*-daemon/
   gnome-screensaver
+  menu-cached
   notification-daemon
   dconf-service
   idn
