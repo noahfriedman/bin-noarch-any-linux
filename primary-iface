@@ -1,0 +1,8 @@
+#!/bin/sh
+# $Id$
+
+PATH=/sbin:$PATH
+
+ip -f inet route list match 0 | sed -e 's/.* dev \([^ ]*\).*/\1/'
+
+# eof
