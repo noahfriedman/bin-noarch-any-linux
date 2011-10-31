@@ -1,7 +1,8 @@
 #!/bin/sh
-# $Id$
+# $Id: rpm-erase,v 1.1 2010/11/29 06:40:40 friedman Exp $
 
-size=$((10 * 1024 * 1024))
+# Older linux distributions cannot handle 2^17 or more max-chars.
+size=65536
 
 case $* in
   *"*"* ) verbose=--verbose ;;
