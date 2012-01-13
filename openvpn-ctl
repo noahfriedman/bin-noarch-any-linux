@@ -1,0 +1,13 @@
+#!/bin/sh
+# $Id$
+
+if [ -d /etc/systemd/system/openvpn.target.wants ]; then
+  cd /etc/systemd/system/openvpn.target.wants
+  set -x
+  systemctl $1 *.service
+else
+  set -x
+  service openvpn $1
+fi
+
+# eof
