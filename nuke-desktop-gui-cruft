@@ -1,5 +1,5 @@
 #!/bin/sh
-# $Id: nuke-desktop-gui-cruft,v 1.7 2011/10/10 03:45:14 friedman Exp $
+# $Id: nuke-desktop-gui-cruft,v 1.8 2011/11/24 19:37:30 friedman Exp $
 
 procs='
   /^gvfsd/
@@ -16,6 +16,7 @@ procs='
 extra='
   npviewer.bin
   mozplugger-helper
+  plugin-container
 '
 
 case $1 in
