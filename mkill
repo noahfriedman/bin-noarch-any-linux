@@ -4,7 +4,7 @@
 # Created: 2008-01-10
 # Public domain
 
-# $Id: mkill,v 1.4 2010/12/10 07:54:36 friedman Exp $
+# $Id: mkill,v 1.5 2011/01/04 13:08:48 friedman Exp $
 
 # Commentary:
 # Code:
@@ -133,7 +133,7 @@ sub main
 {
   my $signal = 15;
 
-  if ($_[0] =~ /^-(\d+|(?:sig)?[a-z]{3})$/i)
+  if ($_[0] =~ /^-(\d+|(?:sig)?[a-z0-9+-]+)$/i)
     {
       $signal = uc ($1);
       shift;
