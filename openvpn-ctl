@@ -1,13 +1,76 @@
 #!/bin/sh
-# $Id$
+# $Id: openvpn-ctl,v 1.1 2012/01/13 08:33:22 friedman Exp $
 
-if [ -d /etc/systemd/system/openvpn.target.wants ]; then
-  cd /etc/systemd/system/openvpn.target.wants
-  set -x
-  systemctl $1 *.service
-else
-  set -x
-  service openvpn $1
-fi
+usage()
+{
+    {
+        echo "Usage: ${0##*/} [start|stop|restart|status] {target}"
+        echo
+        echo "If no target specified, uses splode or splode-proxy."
+        echo "Target is ignored if not using systemd."
+    } 1>&2
+    exit 1
+}
+
+docmd()
+{
+    echo + "$@" 1>&2
+    "$@"
+}
+
+mode_target()
+{
+    action=$1 target=$2
+    docmd systemctl $action $target
+}
+
+mode_default()
+{
+    action=$1
+
+    system_targets=nil
+    targdir=/etc/systemd/system/openvpn.target.wants
+    if [ -d $targdir ]; then
+        for svc in $targdir/*; do
+            svc=${svc#$targdir/}
+            case $svc in
+                openvpn@*.service )
+                    system_targets=t
+                    docmd systemctl $action $svc ;;
+            esac
+        done
+    fi
+
+    if [ $system_targets = nil ]; then
+        get_splode_target
+        docmd systemctl $action $target
+    fi
+}
+
+get_splode_target()
+{
+    if grep -q 00000000:2EA4 /proc/net/tcp ; then
+        target=openvpn@splode-proxy.service
+    else
+        target=openvpn@splode.service
+    fi
+}
+
+main()
+{
+    case $# in
+        1 ) mode=default action=$1 ;;
+        2 ) mode=target  action=$1 target=openvpn@$2.service ;;
+        * ) usage ;;
+    esac
+
+    if type -p systemctl > /dev/null ; then
+        mode_$mode $action $target
+    else
+        docmd service openvpn $action
+    fi
+}
+
+main "$@"
 
 # eof
