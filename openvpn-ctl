@@ -1,5 +1,5 @@
 #!/bin/sh
-# $Id: openvpn-ctl,v 1.1 2012/01/13 08:33:22 friedman Exp $
+# $Id: openvpn-ctl,v 1.2 2012/05/19 19:33:27 friedman Exp $
 
 usage()
 {
@@ -64,10 +64,10 @@ main()
         * ) usage ;;
     esac
 
-    if type -p systemctl > /dev/null ; then
-        mode_$mode $action $target
-    else
+    if [ -f /etc/init.d/openvpn ]; then
         docmd service openvpn $action
+    else
+        mode_$mode $action $target
     fi
 }
 
