@@ -1,0 +1,9 @@
+#!/bin/sh
+# $Id$
+
+# Fedora 15 and earlier don't support these flags,
+# which expand syslog levels and timestamps.
+
+/bin/dmesg -Tx "$@" 2>/dev/null || /bin/dmesg "$@"
+
+# eof
