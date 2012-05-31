@@ -1,0 +1,251 @@
+#!/bin/bash
+# simh-wrapper --- wrapper around simh
+
+# Author: Noah Friedman <friedman@splode.com>
+# Created: 2010-10-09
+# Public domain.
+
+# $Id$
+
+# Commentary:
+
+# To use this, create a simh command script `simh.<name>.in' in the same
+# directory with its virtual disks, and in that file add a comment of the
+# form:
+#
+#	;; simh=pdp11
+#
+# (substitute whatever the appropriate binary is for your emulated system)
+#
+# The binary will be searched in ../bin relative to the simh.in file as
+# well as the rest of your PATH list.
+
+# This script sets up network interfaces for your guest using linux's iproute2
+# As follows:
+#
+#	(vm) <-> if_guest <-> if_host <-> if_bridge
+#
+# The vm communicates with the host, and the outside world, via the bridge
+# interface.  The bridge interface should exist and be up already.  The
+# if_guest/host interfaces are created and torn down when the vm starts and
+# exits.
+#
+# In addition to bridging, this script requires a linux kernel which
+# supports "veth" ethernet tunnels (see iproute2 documentation and linux
+# drivers/net/veth.c source).  This removes the need to create multiple
+# tap/tun interfaces and then run a userspace program to shuttle packets
+# between them.
+
+# If you have no bridge interface set up already, make sure you have brctl
+# (from the bridge-utils distribution) installed.  On Fedora/RedHat/CentOS,
+# you can create a file in /etc/sysconfig/network-scripts/ifcfg-simhbr0 with:
+#
+#	DEVICE=simhbr0
+#	TYPE=Bridge
+#	IPADDR=192.168.111.1
+#	NETMASK=255.255.255.0
+#
+# And then bring it up with "ifup simhbr0".
+
+# Code:
+
+setup()
+{
+    progname=${0##*/}
+
+    progdir=${0%/*}
+    case $progdir in $0 ) progdir=. ;; esac
+
+    if [ -z "$1" ]; then
+        find_simh_conf . "$progdir"
+    elif [ -d "$1" ]; then
+        find_simh_conf "$1"
+    elif [ -f "$1" ]; then
+        case $1 in
+            *simh.*.in )
+                topdir=${1%/*}
+                case $topdir in $1 ) topdir=. ;; esac
+                vmname=${1##*simh.}
+                vmname=${vmname%.in}
+                vmfile_in=$topdir/simh.$vmname.in ;;
+            * )
+                topdir=${1%/*}
+                vmname=${1##*/}
+                vmfile_in=$1 ;;
+        esac
+    else
+        fatal "$1: File not readable or does not exist"
+    fi
+    verbose "Using $vmname simh configuration in $topdir"
+
+    vmfile_tmp=${TMPDIR-/tmp}/simh.$vmname.$$
+
+    find_bridge
+    verbose "Using $bridge for ethernet bridge"
+    veth0=${vmname}_host
+    veth1=${vmname}_guest
+
+    simh=`sed -ne '/;.*[ 	]simh=\([a-z0-9]*\)/{s//\1/p;q;}' "$vmfile_in"`
+    case $simh in
+        '' ) fatal "$vmname: don't know which simh binary to use" ;;
+    esac
+    PATH=$topdir/../bin:$PATH
+
+    for prog in $simh simh-$simh; do
+        if type -P $prog > /dev/null; then
+            simh=`type -P $prog`
+            break
+        fi
+    done
+    verbose "Using $simh executable"
+
+    uid=${UID-`id -u`}
+
+    # simh passes local time to guest which infers it is UTC;
+    # so tell simh that local time is in fact UTC.
+    TZ=UTC
+    export TZ
+}
+
+find_simh_conf()
+{
+    for dir in "$@"; do
+        if find_vmname "$dir"; then
+            topdir=$dir
+            return 0;
+        fi
+    done
+    fatal "cannot find any simh config file (simh.*.in)"
+}
+
+find_vmname()
+{
+    for f in "$1"/simh.*.in; do
+        test -f "$f" || continue
+        vmfile_in=$f
+        vmname=${f#$1/simh.}
+        vmname=${vmname%.in}
+        return 0
+    done
+    return 1
+}
+
+find_bridge()
+{
+    for br in $SIMH_BRIDGE simhbr0 qemu0 ; do
+        if [ -f /sys/class/net/$br/bridge/bridge_id ]; then
+            bridge=$br
+            return 0
+        fi
+    done
+
+    for br in /sys/class/net/*/bridge/bridge_id; do
+        bridge=${br#/sys/class/net/}
+        bridge=${bridge%%/*}
+        return 0
+    done
+
+    fatal "cannot find any ethernet bridge interface"
+}
+
+check_simh_netcap()
+{
+    case $uid in 0 ) return ;; esac
+
+    test -x "$simh" || return;
+
+    if ! getcap "$simh" | grep -q cap_net_raw.ep; then
+        sudo setcap cap_net_raw+ep "$simh"
+    fi
+}
+
+net_setup()
+{
+    bridge=$1 veth0=$2 veth1=$3
+
+    if ! [ -f /sys/class/net/$bridge/bridge/bridge_id ]; then
+      echo "${0##*/}: $bridge: ethernet bridge interface missing.  Aborting." 1>&2
+      exit 1
+    elif [ -d /sys/class/net/$veth0 ]; then
+      echo "${0##*/}: $veth0: ethernet interface already exists.  Aborting." 1>&2
+      exit 1
+    fi
+
+    ip link add $veth0 type veth peer name $veth1
+    brctl addif $bridge $veth0
+
+    ip link set $veth0 up
+    ip link set $veth1 up
+}
+
+net_teardown()
+{
+    veth0=$1 veth1=$2
+
+    # $veth0 will be removed from the bridge automatically.
+    ip link del $veth0 type veth peer name $veth1
+}
+
+asroot()
+{
+    uid=${uid-${UID-`id -u`}}
+
+    fn=$1
+    shift
+
+    case $uid in
+        0 ) $fn "$@" ;;
+        * ) sudo "$0" __$fn "$@" ;;
+    esac
+}
+
+start()
+{
+    asroot net_setup $bridge $veth0 $veth1 || exit $?
+    sed "s/\$TUNDEV/$veth1/" "$vmfile_in" > "$vmfile_tmp"
+    (cd $topdir
+     exec "$simh" "$vmfile_tmp" "$@"
+    )
+    exitstat=$?
+}
+
+stop()
+{
+    exitstat=${exitstat-$?}
+    rm -f "$vmfile_tmp"
+    asroot net_teardown $veth0 $veth1
+    trap '' 1 2 3 15
+    return $exitstat
+}
+
+fatal()
+{
+    echo "${0##*/}: $*" 1>&2
+    exit 1
+}
+
+verbose()
+{
+    case ${SIMH_VERBOSE+t} in
+        t ) echo "${0##*/}: $*" ;;
+    esac
+}
+
+main()
+{
+    case $1 in
+        '' ) : ;;
+        __net_setup | __net_teardown ) fn=${1#__}; shift ; $fn "$@" ; exit $? ;;
+        * ) conf=$1 ; shift ;;
+    esac
+
+    setup $conf
+    check_simh_netcap
+    trap 'stop; exit $exitstat' 1 2 3 15
+    start "$@"
+    stop
+}
+
+main "$@"
+
+# eof
