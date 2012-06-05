@@ -3,7 +3,7 @@
 # Created: 2011-10-02
 # Public domain
 
-# $Id: eth0-fix,v 1.1 2011/10/02 00:20:55 friedman Exp $
+# $Id: eth0-fix,v 1.2 2012/06/05 20:13:41 friedman Exp $
 
 ### BEGIN INIT INFO
 # Provides:          eth0-fix
@@ -28,6 +28,11 @@
 # Using update-rc.d:
 # 	update-rc.d    eth0-fix defaults
 #	update-rc.d -f eth0-fix remove
+# To launch from upstart(8), create /etc/init/eth0-fix.conf with the
+# following lines:
+#	description "detect changed MAC for eth0"
+#	start       on net-device-added INTERFACE=eth1
+#	exec        /etc/init.d/eth0-fix
 
 start()
 {
