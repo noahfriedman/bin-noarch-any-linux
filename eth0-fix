@@ -1,10 +1,33 @@
 #!/bin/sh
-# $Id$
-#
-# eth0-fix	detect changed MAC for eth0
-#
+# Author: Noah Friedman <friedman@splode.com>
+# Created: 2011-10-02
+# Public domain
+
+# $Id: eth0-fix,v 1.1 2011/10/02 00:20:55 friedman Exp $
+
+### BEGIN INIT INFO
+# Provides:          eth0-fix
+# Required-Start:
+# Required-Stop:
+# X-Start-Before:    $network $netdaemons
+# Default-Start:     2 3 4 5
+# Default-Stop:
+# Short-Description: detect changed MAC for eth0
+# Description:       detects changed MAC for eth0 and reconfigures
+### END INIT INFO
+
 # chkconfig: 2345 01 99
 # description:	detects changed MAC for eth0 and reconfigures
+
+# To add/remove using chkconfig:
+#	chkconfig --add eth0-fix
+#	chkconfig --del eth0-fix
+# To add/remove using insserv:
+# 	insserv --default eth0-fix
+#	insserv --remove  eth0-fix
+# Using update-rc.d:
+# 	update-rc.d    eth0-fix defaults
+#	update-rc.d -f eth0-fix remove
 
 start()
 {
