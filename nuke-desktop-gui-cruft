@@ -1,16 +1,24 @@
 #!/bin/sh
-# $Id: nuke-desktop-gui-cruft,v 1.8 2011/11/24 19:37:30 friedman Exp $
+# $Id: nuke-desktop-gui-cruft,v 1.9 2012/02/12 21:01:04 friedman Exp $
 
 procs='
   /^gvfsd/
   /^gvfs-/
   /gnome-.*-daemon/
   gnome-screensaver
+  dconf-service
+  gconfd-2
   menu-cached
   notification-daemon
-  dconf-service
   idn
   aspell
+  at-spi-bus-launcher
+
+  evolution-addressbook-factory
+  goa-daemon
+  libsocialweb-core
+  mission-control-5
+  telepathy-logger
 '
 
 extra='
