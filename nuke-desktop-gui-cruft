@@ -1,5 +1,5 @@
 #!/bin/sh
-# $Id: nuke-desktop-gui-cruft,v 1.9 2012/02/12 21:01:04 friedman Exp $
+# $Id: nuke-desktop-gui-cruft,v 1.10 2012/07/05 23:58:24 friedman Exp $
 
 procs='
   /^gvfsd/
@@ -13,7 +13,7 @@ procs='
   idn
   aspell
   at-spi-bus-launcher
-
+  at-spi2-registryd
   evolution-addressbook-factory
   goa-daemon
   libsocialweb-core
