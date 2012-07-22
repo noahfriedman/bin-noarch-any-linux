@@ -33,6 +33,14 @@ my %tp_acpi_hotkeyscan =
     volumedown  => 21,
     mute        => 22,
     thinkpad    => 23,
+    unk1        => 24,
+    unk2        => 25,
+    unk3        => 26,
+    unk4        => 27,
+    unk5        => 28,
+    unk6        => 29,
+    unk7        => 30,
+    unk8        => 31,
   );
 
 # Positions of some of the keys in hotkey masks
