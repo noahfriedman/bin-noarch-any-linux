@@ -1,5 +1,5 @@
 #!/usr/bin/env perl
-# $Id: guess-hz,v 1.1 2009/05/02 05:42:47 friedman Exp $
+# $Id: guess-hz,v 1.2 2012/12/24 20:07:08 friedman Exp $
 
 # Caveat: This does not tell you whether the kernel uses 'tickless idle'.
 # In that case, the number of interrupts will vary depending on load.
@@ -60,11 +60,10 @@ sub ticks
 {
   local $_ = xcat ("/proc/interrupts");
 
-  my $timer = sum_row ($1) if /^\s*0:\s*([\d\s]*)/m;               # x86
-  my $loc   = sum_row ($1) if /^\s*LOC:\s*([\d\s]*)/m;             # x86
-  my $gp    = sum_row ($1) if /^\s*\d+:\s*([\d\s]*)\s.*gp_timer/m; # arm
-  $timer += $loc if defined $loc;
-  $timer += $gp  if defined $gp;
+  my $timer = 0;
+  $timer += sum_row ($1) if /^\s*0:\s*([\d\s]*)/m;               # x86 int0
+  $timer += sum_row ($1) if /^\s*LOC:\s*([\d\s]*)/m;             # x86 LOC
+  $timer += sum_row ($1) if /^\s*\d+:\s*([\d\s]*).*gp_timer/m;   # arm gp_timer
   return $timer;
 }
 
