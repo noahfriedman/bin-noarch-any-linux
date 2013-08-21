@@ -4,7 +4,7 @@
 # Created: 2008-01-10
 # Public domain
 
-# $Id: env-of,v 1.3 2010/02/18 06:48:42 friedman Exp $
+# $Id: env-of,v 1.4 2010/11/09 18:03:17 friedman Exp $
 
 # Commentary:
 # Code:
@@ -21,26 +21,10 @@ my $opt_verbose = 0;
 sub xcat
 {
   my $fh = gensym;
-  local $_;
   open ($fh, $_[0]) || return;
 
-  if (-s $fh)
-    {
-      sysread ($fh, $_, -s $fh, 0);  # -s returns size
-    }
-  else
-    {
-      my $offset = 0;
-      while (1)
-        {
-          my $amt = sysread ($fh, $_, 4096, $offset);
-          last unless $amt;
-          $offset += $amt;
-        }
-    }
-
-  close ($fh);
-  return $_;
+  local $/ = undef;
+  scalar <$fh>;
 }
 
 sub basename
