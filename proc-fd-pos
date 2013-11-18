@@ -1,0 +1,37 @@
+#!/usr/bin/env perl
+# $Id$
+
+use strict;
+use Symbol;
+
+sub main
+{
+  my ($pid, $fd) = @_;
+  my $name = "/proc/$pid/fdinfo/$fd";
+
+  my $fh = gensym;
+  open ($fh, $name) || die "$name: $!\n";
+
+  $| = 1;
+
+  my $interval = $_[2] || 10;
+  my $last = 0;
+  do
+    {
+      seek ($fh, 0, 0);
+      local $_ = <$fh>;
+      my $pos = $1 if /^pos:\s+(\d+)/;
+      printf ("\r%u  %.02fk  %.02fm  %.02fg  (%.02f m/s) ",
+              $pos,
+              $pos / 1024,
+              $pos / 1024 / 1024,
+              $pos / 1024 / 1024 / 1024,
+              ($pos - $last) / $interval / 1024 / 1024);
+      $last = $pos;
+    } while (sleep ($interval));
+
+}
+
+main (@ARGV);
+
+# eof
