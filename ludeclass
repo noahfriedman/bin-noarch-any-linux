@@ -1,5 +1,5 @@
 #!/usr/bin/perl
-# $Id$
+# $Id: ludeclass,v 1.1 2013/11/27 17:55:46 friedman Exp $
 
 sub main
 {
@@ -33,7 +33,15 @@ sub main
       printf("%s_%s_%s%d ", $arch, $middle, $dist, $n);
       printf("%s_%s_%s%d ", $arch32, $middle, $dist, $n) if defined $arch32;
     }
-  print "\n";
+
+  print join (" ", (qw(ix86_pc_linux_fedora4
+                       ix86_pc_linux_fedora3
+                       ix86_pc_linux_fedora2
+                       ix86_pc_linux_fedora1
+                       ix86_pc_linux_redhat9
+                       ix86_pc_linux_redhat8
+                       ix86_pc_linux_redhat6
+                     ))), "\n";
 }
 
 main (@ARGV);
