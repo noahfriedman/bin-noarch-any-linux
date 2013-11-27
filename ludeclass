@@ -1,0 +1,41 @@
+#!/usr/bin/perl
+# $Id$
+
+sub main
+{
+  my $first_class = $ENV{LUDECLASS};
+  unless (defined $first_class)
+    {
+      my $ludeguess = $ENV{LUDEGUESS} || 'ludeguess';
+      $first_class = `$ludeguess`;
+      chomp $first_class;
+    }
+
+  unless (@_[0] eq '-l')
+    {
+      print $first_class, "\n";
+      exit (0);
+    }
+
+  my ($arch, $middle, $os) = ($1, $2, $3)
+    if $first_class =~ /^([^_]+(?:_64)?)_(.*?)_([^_]+)$/;
+
+  my ($dist, $osver) = ($1, $2) if $os =~ /^(.*?)([\d.]+)$/;
+  if ($osver =~ /\./)
+    {
+      print $first_class, "\n";
+      exit (0);
+    }
+
+  my $arch32 = $1 if $arch =~ /^(.*?)_?64/;
+  for my $n (reverse 1 .. $osver)
+    {
+      printf("%s_%s_%s%d ", $arch, $middle, $dist, $n);
+      printf("%s_%s_%s%d ", $arch32, $middle, $dist, $n) if defined $arch32;
+    }
+  print "\n";
+}
+
+main (@ARGV);
+
+# eof
