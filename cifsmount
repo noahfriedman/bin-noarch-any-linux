@@ -1,5 +1,5 @@
 #!/bin/bash
-# $Id: cifsmount,v 1.4 2011/10/02 00:22:41 friedman Exp $
+# $Id: cifsmount,v 1.5 2011/10/05 20:40:02 friedman Exp $
 
 for cifs_var in ${!CIFSMOUNT_*}; do
   var=`echo ${cifs_var#CIFSMOUNT_} | tr '[A-Z]' '[a-z]'`
@@ -12,6 +12,7 @@ user=${smb_user-${SUDO_USER-${LOGNAME-${USER-`id -u`}}}}
 smb_username=${smb_username-$user}
 smb_workgroup=${smb_workgroup-WORKGROUP}
 
+smb_sec=${smb_sec-ntlm}
 smb_uid=${smb_uid-$user}
 smb_gid=${smb_gid-`id -g`}
 smb_file_mode=0777
