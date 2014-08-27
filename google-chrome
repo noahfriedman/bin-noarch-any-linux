@@ -1,0 +1,11 @@
+#!/bin/sh
+# $Id$
+
+# PepperFlash expects a locale to be set or things like the vsphere web
+# client pop up constant type errors.
+LANG=${LANG-en_US.UTF-8}
+export LANG
+
+exec run-next "$0" "$@"
+
+# eof
