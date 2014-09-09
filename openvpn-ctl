@@ -1,5 +1,5 @@
 #!/bin/sh
-# $Id: openvpn-ctl,v 1.2 2012/05/19 19:33:27 friedman Exp $
+# $Id: openvpn-ctl,v 1.3 2012/05/21 20:43:35 friedman Exp $
 
 usage()
 {
@@ -49,7 +49,7 @@ mode_default()
 
 get_splode_target()
 {
-    if grep -q 00000000:2EA4 /proc/net/tcp ; then
+    if egrep -q '0000(00|7F):2EA4' /proc/net/tcp ; then
         target=openvpn@splode-proxy.service
     else
         target=openvpn@splode.service
