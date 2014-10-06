@@ -4,13 +4,12 @@
 # Created: 2008-01-10
 # Public domain
 
-# $Id: mkill,v 1.5 2011/01/04 13:08:48 friedman Exp $
+# $Id: mkill,v 1.6 2012/05/11 23:37:08 friedman Exp $
 
 # Commentary:
 # Code:
 
 use strict;
-use Symbol;
 
 $^W = 1; # enable warnings
 
@@ -18,27 +17,10 @@ $^W = 1; # enable warnings
 
 sub xcat
 {
-  my $fh = gensym;
-  local $_;
-  open ($fh, $_[0]) || return;
-
-  if (-s $fh)
-    {
-      sysread ($fh, $_, -s $fh, 0);  # -s returns size
-    }
-  else
-    {
-      my $offset = 0;
-      while (1)
-        {
-          my $amt = sysread ($fh, $_, 4096, $offset);
-          last unless $amt;
-          $offset += $amt;
-        }
-    }
-
-  close ($fh);
-  return $_;
+  my $fh;
+  open ($fh, $_[0]) || die "open: $_[0]: $!\n";
+  local $/ = undef;
+  return scalar <$fh>;
 }
 
 sub basename
@@ -141,7 +123,6 @@ sub main
 
   unless (@_)
     {
-
       print STDERR "Usage: $progname -signal procname ...\n";
       print STDERR "   or  $progname -signal /regex/ ...\n";
       exit (1);
