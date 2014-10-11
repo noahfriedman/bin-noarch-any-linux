@@ -4,12 +4,13 @@
 # Created: 2008-01-10
 # Public domain
 
-# $Id: mkill,v 1.6 2012/05/11 23:37:08 friedman Exp $
+# $Id: mkill,v 1.7 2014/10/06 01:54:37 friedman Exp $
 
 # Commentary:
 # Code:
 
 use strict;
+use Symbol;
 
 $^W = 1; # enable warnings
 
@@ -17,7 +18,7 @@ $^W = 1; # enable warnings
 
 sub xcat
 {
-  my $fh;
+  my $fh = gensym;
   open ($fh, $_[0]) || die "open: $_[0]: $!\n";
   local $/ = undef;
   return scalar <$fh>;
