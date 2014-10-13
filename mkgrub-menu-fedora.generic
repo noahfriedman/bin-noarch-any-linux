@@ -1,5 +1,5 @@
 #!/usr/bin/env perl
-# $Id$
+# $Id: mkgrub-menu-fedora.generic,v 1.1 2014/10/05 00:28:43 friedman Exp $
 
 use strict;
 use POSIX;
@@ -15,7 +15,7 @@ my %fsplat = ( x86_64 => 'x64',
 my @options = (qw());
 
 my $tmpl_host  = hostnick ();
-my $tmpl_part = "(hd0,2)";
+my $tmpl_part = "(hd0,1)";
 my $tmpl_root = "/dev/${tmpl_host}_vg0/f%3\$d%4\$s_root";
 
 my $template = "
