@@ -1,0 +1,7 @@
+#!/bin/sh
+# $Id$
+
+# Shows all but kernel threads
+exec mps --deselect --pid 2 --ppid 2 "$@"
+
+# eof
