@@ -1,5 +1,5 @@
 #!/usr/bin/env perl
-# $Id: mkgrub-menu-fedora.generic,v 1.1 2014/10/05 00:28:43 friedman Exp $
+# $Id: mkgrub-menu-fedora.generic,v 1.2 2014/10/13 03:30:02 friedman Exp $
 
 use strict;
 use POSIX;
@@ -9,13 +9,12 @@ $^W = 1;
 #my $menu_file = "/boot/grub2/grub-menu-fedora.cfg";
 my $menu_file  = "/dev/stdout";
 
-my %fsplat = ( x86_64 => 'x64',
-               i686   => 'x86', );
-
 my @options = (qw());
 
-my $tmpl_host  = hostnick ();
-my $tmpl_part = "(hd0,1)";
+my $update_default = 0;
+
+my $tmpl_host = hostnick ();
+my $tmpl_part = sprintf ("(hd0,%d)", bootpart ());;
 my $tmpl_root = "/dev/${tmpl_host}_vg0/f%3\$d%4\$s_root";
 
 my $template = "
@@ -25,6 +24,23 @@ my $template = "
 	    linux    /vmlinuz-%2\$s root=$tmpl_root ro %5\$s
 	    initrd /initramfs-%6\$s.img
 	}\n";
+
+my %fsplat = ( x86_64 => 'x64',
+               i686   => 'x86', );
+
+sub xcat
+{
+  my $fh;
+  open ($fh, $_[0]) || die "open: $_[0]: $!\n";
+  local $/ = undef;
+  scalar <$fh>;
+}
+
+sub bootpart
+{
+  my $fstab = xcat ("/etc/fstab");
+  return $1 if $fstab =~ m=^/\S+(\d+)\s+/boot\s=m;
+}
 
 sub hostnick
 {
@@ -76,17 +92,19 @@ sub main
 
   my $koptions = join (" ", @options);
   my @kversions = kernel_versions ();
-  my $latest = $kversions[0];
+  my $latest;
   for my $version (@kversions)
     {
       if ($version =~ /rescue/)
         {
           my $label = sprintf ("Fedora rescue (%s)", $version);
-          my $entry  = sprintf ($template, $label,
-                                $version, 0, "", $koptions,
-                                $version);
+          my $entry = sprintf ($template, $label,
+                               $version, 0, "", $koptions,
+                               $version);
           $entry =~ s/^\t//gm;
           print $fh $entry;
+
+          $latest ||= $label;
         }
       else
         {
@@ -100,9 +118,12 @@ sub main
                                 $version);
           $entry =~ s/^\t//gm;
           print $fh $entry;
+
+          $latest ||= $label;
         }
     }
-  #system (qw(grub2-editenv /boot/grub2/grubenv set), "saved_default=$latest");
+  system (qw(grub2-editenv /boot/grub2/grubenv set), "saved_default=$latest")
+    if $update_default;
 }
 
 main (@ARGV);
