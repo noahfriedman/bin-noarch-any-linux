@@ -1,5 +1,5 @@
 #!/usr/bin/env perl
-# $Id: mkgrub-menu-fedora.generic,v 1.2 2014/10/13 03:30:02 friedman Exp $
+# $Id: mkgrub-menu-fedora.generic,v 1.3 2014/12/17 23:59:06 friedman Exp $
 
 use strict;
 use POSIX;
@@ -14,7 +14,7 @@ my @options = (qw());
 my $update_default = 0;
 
 my $tmpl_host = hostnick ();
-my $tmpl_part = sprintf ("(hd0,%d)", bootpart ());;
+my $tmpl_part = sprintf ("(hd0,%d)", bootpart ());
 my $tmpl_root = "/dev/${tmpl_host}_vg0/f%3\$d%4\$s_root";
 
 my $template = "
