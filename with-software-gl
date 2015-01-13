@@ -1,11 +1,9 @@
 #!/bin/sh
 
-# Used by Mesa 3.4 to force soft rendering if SGI_GLX is enabled
-MESA_FORCE_SOFTX=t
-export MESA_FORCE_SOFTX
-
-# Used by XFree86 4.0.2 to force soft rendering
 LIBGL_ALWAYS_INDIRECT=t
+LIBGL_ALWAYS_SOFTWARE=t
+
 export LIBGL_ALWAYS_INDIRECT
+export LIBGL_ALWAYS_SOFTWARE
 
 exec ${1+"$@"}
