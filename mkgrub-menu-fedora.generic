@@ -1,5 +1,5 @@
 #!/usr/bin/env perl
-# $Id: mkgrub-menu-fedora.generic,v 1.3 2014/12/17 23:59:06 friedman Exp $
+# $Id: mkgrub-menu-fedora.generic,v 1.4 2015/01/03 05:25:01 friedman Exp $
 
 use strict;
 use POSIX;
@@ -9,9 +9,9 @@ $^W = 1;
 #my $menu_file = "/boot/grub2/grub-menu-fedora.cfg";
 my $menu_file  = "/dev/stdout";
 
-my @options = (qw());
-
 my $update_default = 0;
+
+my @options = (qw());
 
 my $tmpl_host = hostnick ();
 my $tmpl_part = sprintf ("(hd0,%d)", bootpart ());
@@ -38,8 +38,12 @@ sub xcat
 
 sub bootpart
 {
-  my $fstab = xcat ("/etc/fstab");
-  return $1 if $fstab =~ m=^/\S+(\d+)\s+/boot\s=m;
+  for my $file (qw(/etc/fstab /proc/mounts))
+    {
+      my $tbl = xcat ($file);
+      return $1 if $tbl =~ m=^/\S+(\d+)\s+/boot\s=m;
+    }
+  return "0";
 }
 
 sub hostnick
