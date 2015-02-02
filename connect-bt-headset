@@ -1,0 +1,68 @@
+#!/usr/bin/env perl
+# $Id$
+
+# Connect my headset using the bloody fucking bluez5 crapware.
+
+package BTExpect ;
+
+use strict;
+use Expect;
+
+our @ISA = qw(Expect);
+
+our $cb = quotemeta ("\033[0;92m");
+our $ce = quotemeta ("\033[0m");
+
+sub usleep { select (undef, undef, undef, $_[0]) }
+
+sub new
+{
+  my $type = shift;
+  my $self = $type->SUPER::new (@_);
+
+  #$self->debug (3);
+  #$self->exp_internal (1);
+  $self->raw_pty (1);
+  $self->spawn ('bluetoothctl');
+
+  usleep (.01);
+  $self->SUPER::send ("\n");
+
+  return $self;
+}
+
+sub send
+{
+  my $self = shift;
+
+  print @_, "\n";
+  $self->SUPER::send (@_, "\n");
+  exp_continue;
+}
+
+package main;
+
+use strict;
+
+sub main
+{
+  my $e = BTExpect->new;
+
+  $e->expect (10,
+              [ qr/\[${cb}NEW$ce\] Controller.*#/s
+                => sub { $e->send ("power on") }
+              ],
+              [ qr/Changing power on succeeded/
+                => sub { $e->send ("connect F0:65:DD:8F:5D:F8") }
+              ],
+              [ qr/Connection successful/
+                => sub { $e->send ("quit") }
+              ],
+              [ qr/\[${cb}DEL$ce\] Controller/
+                => sub { $e->soft_close; }
+              ]);
+}
+
+main (@ARGV);
+
+# eof
