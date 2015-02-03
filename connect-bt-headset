@@ -1,5 +1,5 @@
 #!/usr/bin/env perl
-# $Id$
+# $Id: connect-jbl-headset,v 1.1 2015/02/02 23:51:56 friedman Exp $
 
 # Connect my headset using the bloody fucking bluez5 crapware.
 
@@ -44,9 +44,10 @@ package main;
 
 use strict;
 
-sub main
+sub bt_connect
 {
   my $e = BTExpect->new;
+  my $succ;
 
   $e->expect (10,
               [ qr/\[${cb}NEW$ce\] Controller.*#/s
@@ -56,13 +57,55 @@ sub main
                 => sub { $e->send ("connect F0:65:DD:8F:5D:F8") }
               ],
               [ qr/Connection successful/
-                => sub { $e->send ("quit") }
+                => sub { $e->send ("quit");
+                         $succ = 1;
+                       }
+              ],
+              [ qr/Failed to connect/
+                => sub { $e->send ("quit");
+                         $succ = 0;
+                       }
               ],
               [ qr/\[${cb}DEL$ce\] Controller/
                 => sub { $e->soft_close; }
               ]);
+  return $succ;
+}
+
+sub xsystem
+{
+  print "+ @_\n";
+  system (@_);
+  exit ($?) unless $? == 0;
+}
+
+sub xbt
+{
+  print "+ @_\n";
+  my $out = `@_`;
+  print $out;
+  exit ($?) unless $? == 0;
+  return $out;
+}
+
+sub main
+{
+  return $? unless bt_connect();
+
+  my $cards = xbt (qw(pactl list short cards));
+  my $id = $1 if $cards =~ /^(\d+)\s+bluez_card/m;
+  return 0 unless defined $id;
+  xsystem (qw(pactl set-card-profile), $id, qw(a2dp_sink));
+
+  my $sinks = xbt (qw(pactl list short sinks));
+  $id = $1 if $sinks =~ /^(\d+)\s+bluez_sink/m;
+  return 0 unless defined $id;
+  xsystem (qw(pactl set-default-sink), $id);
+
+  return $?;
 }
 
 main (@ARGV);
 
 # eof
+#
