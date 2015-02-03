@@ -1,5 +1,5 @@
 #!/usr/bin/env perl
-# $Id: connect-jbl-headset,v 1.1 2015/02/02 23:51:56 friedman Exp $
+# $Id: connect-jbl-headset,v 1.2 2015/02/03 20:32:57 friedman Exp $
 
 # Connect my headset using the bloody fucking bluez5 crapware.
 
@@ -46,6 +46,8 @@ use strict;
 
 sub bt_connect
 {
+  my $btid = shift;
+
   my $e = BTExpect->new;
   my $succ;
 
@@ -54,7 +56,7 @@ sub bt_connect
                 => sub { $e->send ("power on") }
               ],
               [ qr/Changing power on succeeded/
-                => sub { $e->send ("connect F0:65:DD:8F:5D:F8") }
+                => sub { $e->send ("connect $btid") }
               ],
               [ qr/Connection successful/
                 => sub { $e->send ("quit");
@@ -90,7 +92,7 @@ sub xbt
 
 sub main
 {
-  return $? unless bt_connect();
+  return $? unless bt_connect ($_[0] || 'F0:65:DD:8F:5D:F8');
 
   my $cards = xbt (qw(pactl list short cards));
   my $id = $1 if $cards =~ /^(\d+)\s+bluez_card/m;
