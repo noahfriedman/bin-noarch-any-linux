@@ -3,7 +3,7 @@
 # Created: 2011-10-02
 # Public domain
 
-# $Id: eth0-fix,v 1.3 2012/06/05 21:54:31 friedman Exp $
+# $Id: eth0-fix,v 1.4 2015/02/19 00:02:08 friedman Exp $
 
 ### BEGIN INIT INFO
 # Provides:          eth0-fix
@@ -36,34 +36,41 @@
 
 start()
 {
-  if [ -e /sys/class/net/eth1 ] && ! [ -e /sys/class/net/eth0 ]; then
-    rules=/etc/udev/rules.d/70-persistent-net.rules
-    omac=`sed -ne '/eth0/s/.*{address}=="\([^"]*\)".*/\1/p' $rules`
-    read nmac < /sys/class/net/eth1/address
+    if [ -e /sys/class/net/eth1 ] && ! [ -e /sys/class/net/eth0 ]; then
+        rules=/etc/udev/rules.d/70-persistent-net.rules
+        omac=`sed -ne '/eth0/s/.*{address}=="\([^"]*\)".*/\1/p' $rules`
+        read nmac < /sys/class/net/eth1/address
 
-    logger -p daemon.info -t ${0##*/} -i -s \
-        "Primary ethernet MAC has changed from $omac to $nmac; renaming eth1 to eth0."
+        logger -p daemon.info -t ${0##*/} -i -s \
+               Primary ethernet MAC has changed from $omac to $nmac\; \
+               renaming eth1 to eth0.
 
-    sed -i \
-        -e '/eth0/s/\({address}=="\)[^"]*/\1'"$nmac/" \
-        -e '/eth1/d' \
-        -e '/# PCI device/d' \
-        $rules
+        sed -i \
+            -e '/eth0/s/\({address}=="\)[^"]*/\1'"$nmac/" \
+            -e '/eth1/d' \
+            -e '/# PCI device/d' \
+            $rules
 
-    # Fedora/RHEL/CentOS
-    cfg=/etc/sysconfig/network-scripts/ifcfg-eth0
-    if [ -f $cfg ] && grep "^HWADDR=$omac" $cfg > /dev/null
-    then
-        sed -i -e "/^HWADDR=/s/=.*/=$nmac" $cfg
+        # CentOS 6.x udev generates new rules here before root filesystem
+        # is mounted read/write, then the udev-post init script (which runs
+        # after this one) appends them to the existing rules.  Delete this
+        # one now so that doesn't happen.
+        rm -f /dev/.udev/tmp-rules--${rules##*/}
+
+        # Fedora/RHEL/CentOS
+        cfg=/etc/sysconfig/network-scripts/ifcfg-eth0
+        if [ -f $cfg ] && grep "^HWADDR=" $cfg > /dev/null
+        then
+            sed -i -e "/^HWADDR=/d" $cfg
+        fi
+
+        ip link set eth1 name eth0
+        udevadm control --reload-rules
     fi
-
-    ip link set eth1 name eth0
-    udevadm control --reload-rules
-  fi
 }
 
 case $1 in
-  start | '' ) start ;;
+    start | '' ) start ;;
 esac
 
 # eof
