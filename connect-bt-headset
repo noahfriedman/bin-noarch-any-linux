@@ -1,5 +1,5 @@
 #!/usr/bin/env perl
-# $Id: connect-jbl-headset,v 1.3 2015/02/03 20:36:02 friedman Exp $
+# $Id: connect-bt-headset,v 1.4 2015/06/25 20:32:49 friedman Exp $
 
 # Connect my headset using the bloody fucking bluez5 crapware.
 
@@ -109,6 +109,11 @@ sub get_btmac
 sub main
 {
   return $? unless bt_connect ($_[0] || get_btmac);
+
+  # After the new evdev device is added, if the pause button on the headset
+  # is pressed it will reset all the custom xkb bindings.  Running this
+  # preemptively seems to avoid that, though I'm not sure why.
+  xsystem (qw(reset-xkb));
 
   my $cards = xbt (qw(pactl list short cards));
   my $id = $1 if $cards =~ /^(\d+)\s+bluez_card/m;
