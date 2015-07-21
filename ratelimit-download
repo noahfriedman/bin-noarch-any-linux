@@ -1,23 +1,23 @@
 #!/bin/sh
-# $Id$
+# $Id: ratelimit-web-download,v 1.1 2015/07/21 00:53:54 friedman Exp $
 
 xtc() { (set -x; tc "$@"); }
 
 reset()
 {
-    tc qdisc del dev $iface handle ffff: ingress 2> /dev/null
+    xtc qdisc del dev $iface handle ffff: ingress 2> /dev/null
 }
 
 status()
 {
-    tc -iec -r -p -d -s filter ls dev $iface parent ffff:
+    xtc -iec -r -p -d -s filter ls dev $iface parent ffff:
 }
 
 config()
 {
     reset
 
-    tc qdisc add dev $iface handle ffff: ingress
+    xtc qdisc add dev $iface handle ffff: ingress
 
     for port in 80 443; do
         xtc filter \
