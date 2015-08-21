@@ -1,5 +1,5 @@
 #!/usr/bin/env perl
-# $Id: connect-bt-headset,v 1.5 2015/06/30 19:08:21 friedman Exp $
+# $Id: connect-bt-headset,v 1.6 2015/07/08 22:26:27 friedman Exp $
 
 # Connect my headset using the bloody fucking bluez5 crapware.
 
@@ -84,7 +84,12 @@ sub xsystem
 sub xbt
 {
   print "+ @_\n";
-  my $out = `@_`;
+
+  open (my $fh, "-|", @_) || die "exec: $_[0]: $!\n";
+  local $/ = undef;
+  my $out = <$fh>;
+  close ($fh);
+
   print $out;
   exit ($?) unless $? == 0;
   return $out;
@@ -92,17 +97,18 @@ sub xbt
 
 sub xcat
 {
-  my $fh;
-  open ($fh, $_[0]) || die "$_[0]: $!\n";
+  open (my $fh, $_[0]) || die "open: $_[0]: $!\n";
   local $/ = undef;
   return <$fh>;
 }
 
 sub get_btmac
 {
+  # Pass in "$ENV{HOME}" rather than just $ENV{HOME}, so that appending to
+  # $_ in map doesn't modify the environment variable itself, just a copy!
   map { $_ .= "/.btheadset";
         if (-f $_) { $_ = xcat ($_); chomp; return $_; }
-      } ($ENV{HOME}, "$ENV{HOME}/etc/misc");
+      } ("$ENV{HOME}", "$ENV{HOME}/etc/misc");
   return;
 }
 
