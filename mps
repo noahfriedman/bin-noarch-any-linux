@@ -1,5 +1,5 @@
 #!/usr/bin/env perl
-# $Id: mps,v 1.6 2011/10/10 04:06:59 friedman Exp $
+# $Id: mps,v 1.7 2011/10/10 05:10:14 friedman Exp $
 
 $^W = 1; # enable warnings
 
@@ -11,81 +11,63 @@ use NF::FmtCols;
 use Symbol;
 use strict;
 
-my %field =
-  ( 'user'    => { order =>  0, rjustify => 0, },
-    'pid'     => { order =>  1, rjustify => 1, },
-    'ppid'    => { order =>  2, rjustify => 1, },
-    'nlwp=#T' => { order =>  3, rjustify => 1, },
-    '%cpu'    => { order =>  4, rjustify => 1, },
-    '%mem'    => { order =>  5, rjustify => 1, },
-    'ni'      => { order =>  6, rjustify => 1, },
-    'vsz'     => { order =>  7, rjustify => 1, },
-    'rss'     => { order =>  8, rjustify => 1, },
-    'tty=TTY' => { order =>  9, rjustify => 0, },
-    'stat=ST' => { order => 10, rjustify => 0, },
-    'cpuid=P' => { order => 11, rjustify => 1, },
-    'stime'   => { order => 12, rjustify => 1, },
-    'bsdtime' => { order => 13, rjustify => 1, },
-    'context' => { order => 14, rjustify => 0, },
-    'args'    => { order => 15, rjustify => 0, },
-  );
+my @field =     # 1 = right-justify
+  ( [qw( user     0 )],
+    [qw( pid      1 )],
+    [qw( ppid     1 )],
+    [qw( nlwp=#T  1 )],
+    [qw( %cpu     1 )],
+    [qw( %mem     1 )],
+    [qw( ni       1 )],
+    [qw( vsz      1 )],
+    [qw( rss      1 )],
+    [qw( tty=TTY  0 )],
+    [qw( stat=ST  0 )],
+    [qw( cpuid=P  1 )],
+    [qw( stime    1 )],
+    [qw( bsdtime  1 )],
+    [qw( context  0 )],
+    [qw( args     0 )] );
 
 sub field_names
 {
-  sort { $field{$a}->{order} <=> $field{$b}->{order} } keys %field;
+  map { $_->[0] } @field;
 }
 
 sub field_rjustify
 {
-  map { $field{$_}->{order} => $field{$_}->{rjustify} } keys %field;
+  my $i = 0;
+  map { $i++ => $_->[1] } @field;
 }
 
-sub startproc
+sub delete_field
 {
-  my ($rfh, $wfh) = (gensym, gensym); # readhandle, writehandle
-  pipe ($rfh, $wfh);
-
-  my $pid = fork;
-  die "fork: $!\n" unless defined $pid;
-
-  if ($pid == 0) # child
+  for (my $i = 0; $i < @field; $i++)
     {
-      open (*STDOUT{IO}, ">&" . fileno ($wfh));
-      close ($rfh);
-      close ($wfh);
-      local $SIG{__WARN__} = sub { 0 };
-      exec (@_) || die "exec: $_[0]: $!";
-    }
-  else
-    {
-      close ($wfh);
-      return $rfh;
+      return splice (@field, $i, 1)
+        if $field[$i]->[0] eq $_[0];
     }
 }
 
 sub main
 {
-  unless ($ENV{MPS_CONTEXT} && -d "/selinux/booleans")
-    {
-      delete $field{context};
-    }
+  delete_field ('context')
+    unless $ENV{MPS_CONTEXT} && -d "/sys/fs/selinux/booleans";
 
   $ENV{PS_FORMAT} = join (',', field_names());
   $ENV{PS_PERSONALITY} = 'linux';
 
   push @_, qw(-A) unless (@_);
-  my @pscmd = qw(ps);
-  push @pscmd, @_;
+  unshift @_, qw(ps);
 
-  my $fh = startproc (@pscmd);
-  my @lines = grep { chomp; !/@pscmd|$0/ } <$fh>;
+  open (my $fh, "-|", @_) || die "fork: $!\n";
+  my @lines = grep { chomp; !/@_|$0/ } <$fh>;
   close ($fh);
-  wait;
 
   my $fmt = NF::FmtCols->new
     ( output_style            => 'plain',
       skip_leading_whitespace => 1,
-      num_fields              => scalar keys %field,
+      num_fields              => scalar @field,
       right_justify           => { field_rjustify() },
     );
   $fmt->read_from_array (\@lines);
