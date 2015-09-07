@@ -1,45 +1,26 @@
 #!/bin/sh
-# $Id: firefox,v 1.6 2009/01/13 21:23:26 friedman Exp $
-
-# Use the `linux32' wrapper on x86_64 machines to insure we run the 32-bit
-# version of firefox.  This is for the sake of getting common plugins such
-# as adobe's flash player.
-#
-# 2009-01-13 for now, stick with native arch and use nspluginwrapper.
-linux32=
-#case `uname -m` in
-#  x86_64 ) linux32=linux32 ;;
-#esac
+# $Id: firefox,v 1.7 2011/10/10 17:34:45 friedman Exp $
 
 prog=`run-next -p "$0"`
 
 case $* in
-  *-ProfileManager* ) exec $linux32 "$prog" "$@" ;;
+    *-ProfileManager* ) exec run-misc.sh "$prog" "$@" ;;
 esac
 
-if $linux32 "$prog" -remote 'ping()' 2> /dev/null ; then
-  exec $linux32 "$prog" "$@"
+if run-misc.sh "$prog" -remote 'ping()' 2> /dev/null ; then
+    exec run-misc.sh "$prog" "$@"
 fi
 
 numscreens=`xdpyinfo | sed -n -e '/^number of screens: */s///p'`
 case $numscreens in
-  1 ) exec $linux32 "$prog" "$@" ;;
+    1 ) exec run-misc.sh "$prog" "$@" ;;
 esac
-
-#version=`$linux32 "$prog" -version \
-#           | sed -e 's/^.*Firefox \([0-9]*\)\.\([0-9]*\).*/\1\2/' \
-#                 -e '/^\(.\)0/s//\1/'`
-#
-# 2011-10-10 For now, since firefox version numbers are shooting up faster
-# than a freshly minted heroin addict, don't bother versioning profiles
-# anymore.
-version=
 
 case $DISPLAY in
-  :*.0 ) set fnord -P firefox$version     "$@"; shift ;;
-  :*.1 ) set fnord -P firefox$version.2nd "$@"; shift ;;
+    :*.0 ) set fnord -P firefox     "$@"; shift ;;
+    :*.1 ) set fnord -P firefox.2nd "$@"; shift ;;
 esac
 
-exec $linux32 "$prog" "$@"
+exec run-misc.sh "$prog" "$@"
 
 # eof
