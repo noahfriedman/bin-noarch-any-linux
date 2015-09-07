@@ -1,0 +1,4 @@
+#!/bin/sh
+# $Id$
+
+exec lpr -o media=letter -o sides=one-sided "$@"

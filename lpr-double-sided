@@ -1,3 +1,4 @@
 #!/bin/sh
+# $Id$
 
-exec lpr -o sides=two-sided-long-edge "$@"
+exec lpr -o media=letter -o sides=two-sided-long-edge "$@"
