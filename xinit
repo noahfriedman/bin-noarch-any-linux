@@ -1,0 +1,9 @@
+#!/bin/sh
+# $Id$
+
+XSERVERRC=${XSERVERRC:-$HOME/etc/init/share/xserverrc}
+export XSERVERRC
+
+exec run-next -p "$0" "$@"
+
+# eof
