@@ -1,9 +1,9 @@
 #!/bin/sh
-# $Id$
+# $Id: xinit,v 1.1 2015/09/09 02:23:34 friedman Exp $
 
 XSERVERRC=${XSERVERRC:-$HOME/etc/init/share/xserverrc}
 export XSERVERRC
 
-exec run-next -p "$0" "$@"
+exec run-next "$0" "$@"
 
 # eof
