@@ -1,7 +1,5 @@
 #!/bin/sh
-# $Id: iptl,v 1.1 2006/08/31 22:27:31 friedman Exp $
-
-iptn=/proc/net/ip_tables_names
+# $Id: iptl,v 1.2 2009/07/21 17:42:33 friedman Exp $
 
 main()
 {
@@ -10,15 +8,27 @@ main()
     * ) exec sudo "$0" ${1+"$@"} ;;
   esac
 
+  iptn=/proc/net/ip_tables_names
+  iptables=iptables
+  nfields=11
+
   table=filter
-  case $#:$1 in
-    0:*  ) : ;;
-    *:-a ) table=-a ;;
-    *:*  ) if table_p $1; then
-             table=$1
-             shift
-           fi ;;
-  esac
+  while :; do
+      case $#:$1 in
+          0:*  ) break ;;
+          *:-a ) table=-a
+                 shift ;;
+          *:-6 ) iptn=/proc/net/ip6_tables_names
+                 iptables=ip6tables
+                 nfields=10
+                 shift ;;
+          *:*  ) if table_p $1; then
+                     table=$1
+                     shift
+                 fi
+                 break ;;
+      esac
+  done
 
   case $#:$1 in
     0:* ) : ;;
@@ -45,15 +55,21 @@ table_p()
   esac
 }
 
+ip6tables()
+{
+    # The opt field is always blank and this just messes with formatting.
+    /usr/sbin/ip6tables "$@" | sed -e '/pkts .* opt /s/opt //'
+}
+
 ipt()
 {
-  iptables --table $1     \
-           --list  $2     \
-           --line-numbers \
-           --numeric      \
-           --verbose      \
+  $iptables --table $1     \
+            --list  $2     \
+            --line-numbers \
+            --numeric      \
+            --verbose      \
    | fmtcols --skip-leading-whitespace  \
-             --num-fields 11            \
+             --num-fields $nfields      \
              --ignore-matching '^Chain' \
              --right-justify 0,1,2      \
              --output-separator '  '
