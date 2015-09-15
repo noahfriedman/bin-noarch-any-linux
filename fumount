@@ -1,0 +1,8 @@
+#!/bin/sh
+# $Id$
+
+for m in "$@"; do
+    fusermount -u "$m"
+done
+
+# eof
