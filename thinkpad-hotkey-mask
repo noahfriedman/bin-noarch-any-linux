@@ -1,4 +1,10 @@
 #!/usr/bin/perl
+# thinkpad-hotkey-mask -- compose new or display existing thinkpad hotkey mask
+# Author: Noah Friedman <friedman@splode.com>
+# Created: 2010-12-10
+# Public domain
+
+# $Id$
 
 use strict;
 use Symbol;
@@ -7,76 +13,125 @@ $^W = 1; # enable warnings
 
 my $tp_acpi_dir = "/sys/devices/platform/thinkpad_acpi";
 
-# Data lifted from linux thinkpad_acpi.c module
-my %tp_acpi_hotkeyscan =
-  ( fnf1        =>  0,
-    fnf2        =>  1,
-    fnf3        =>  2,
-    fnf4        =>  3,
-    fnf5        =>  4,
-    fnf6        =>  5,
-    fnf7        =>  6,
-    fnf8        =>  7,
-    fnf9        =>  8,
-    fnf10       =>  9,
-    fnf11       => 10,
-    fnf12       => 11,
-    fnbackspace => 12,
-    fninsert    => 13,
-    fndelete    => 14,
-    fnhome      => 15,
-    fnend       => 16,
-    fnpageup    => 17,
-    fnpagedown  => 18,
-    fnspace     => 19,
-    volumeup    => 20,
-    volumedown  => 21,
-    mute        => 22,
-    thinkpad    => 23,
-    unk1        => 24,
-    unk2        => 25,
-    unk3        => 26,
-    unk4        => 27,
-    unk5        => 28,
-    unk6        => 29,
-    unk7        => 30,
-    unk8        => 31,
-  );
+# Data lifted from linux 4.1.7 thinkpad_acpi.c module
+# mute2 and later are only available on so-called "adaptive" keyboards.
+my @tp_acpi_hotkey_enum =
+  (qw(fnf1 fnf2 fnf3 fnf4 fnf5 fnf6 fnf7 fnf8 fnf9 fnf10 fnf11 fnf12
+      fnbackspace fninsert fndelete fnhome fnend fnpageup fnpagedown fnspace
+      volumeup volumedown mute thinkpad
+      unk1 unk2 unk3 unk4 unk5 unk6 unk7 unk8
 
-# Positions of some of the keys in hotkey masks
-my %tp_acpi_hkey_mask =
-  ( dispswtch => 1 << $tp_acpi_hotkeyscan{fnf7},
-    dispxpand => 1 << $tp_acpi_hotkeyscan{fnf8},
-    hibernate => 1 << $tp_acpi_hotkeyscan{fnf12},
-    brghtup   => 1 << $tp_acpi_hotkeyscan{fnhome},
-    brghtdwn  => 1 << $tp_acpi_hotkeyscan{fnend},
-    thnklght  => 1 << $tp_acpi_hotkeyscan{fnpageup},
-    zoom      => 1 << $tp_acpi_hotkeyscan{fnspace},
-    volup     => 1 << $tp_acpi_hotkeyscan{volumeup},
-    voldwn    => 1 << $tp_acpi_hotkeyscan{volumedown},
-    mute      => 1 << $tp_acpi_hotkeyscan{mute},
-    thinkpad  => 1 << $tp_acpi_hotkeyscan{thinkpad},
-  );
+      mute2 brightness_zero clipping_tool cloud unk9 voice unk10 gestures
+      unk11 unk12 unk13
+      config new_tab reload back
+      mic_down mic_up mic_cancellation
+      camera_mode rotate_display));
+
+# Not currently used
+#my %tp_acpi_hkey_alias =
+#    ( dispswtch => 'fnf7',
+#      dispxpand => 'fnf8',
+#      hibernate => 'fnf12',
+#      brghtup   => 'fnhome',
+#      brghtdwn  => 'fnend',
+#      thnklght  => 'fnpageup',
+#      zoom      => 'fnspace',
+#     );
 
 sub tp_acpi_get
 {
-  my ($filename) = @_;
-  my $fh = gensym;
-  die unless open ($fh, "< $tp_acpi_dir/$filename");
-  local $_ = join ("", <$fh>);
-  close ($fh);
+  my $file = "$tp_acpi_dir/$_[0]";
+  open (my $fh, $file) || die "open: $file: $!\n";
+  local $/ = undef;
+  local $_ = <$fh>;
   s/[\r\n]//g;
-  return $_;
+  return hex ($_);
+}
+
+sub trim_unsupported_mask
+{
+  my $all_mask = tp_acpi_get ("hotkey_all_mask");
+  my ($my_mask, $i) = (0, 0);
+  $my_mask |= 1 << $i++ while $my_mask < $all_mask;
+  splice (@tp_acpi_hotkey_enum, $i) if $i < @tp_acpi_hotkey_enum;
+}
+
+my %tp_acpi_hkey_mask;
+sub init_tp_acpi_hkey_mask
+{
+  for (my $i = 0; $i < @tp_acpi_hotkey_enum; $i++)
+    {
+      my $key = $tp_acpi_hotkey_enum[$i];
+      $tp_acpi_hkey_mask{$key} = 1 << $i;
+    }
+}
+
+sub get_hkey_mask
+{
+  local $_ = shift;
+
+  return $tp_acpi_hkey_mask{$_} if exists $tp_acpi_hkey_mask{$_};
+  return hex ($_)               if /^0x/;
+  return $_                     if /^\d+$/;
+  return tp_acpi_get ($_);
+}
+
+sub print_hkey_mask
+{
+  my $val = get_hkey_mask ($_[0]);
+  printf ("%s:  0x%x  0%o  %b\n\n", "MASK", $val, $val, $val, $val);
+
+  my $w16 = display_width (scalar @tp_acpi_hotkey_enum, 16);
+  my $wnm = max (map { length $_ } @tp_acpi_hotkey_enum);
+  my $fmt = "%02d  0x%0${w16}x  %-${wnm}s  =  %s\n";
+  for (my $i = 0; $i < @tp_acpi_hotkey_enum; $i++)
+    {
+      my $name = $tp_acpi_hotkey_enum[$i];
+      my $mask = $tp_acpi_hkey_mask{$name};
+      my $on = $val & $mask;
+      printf ($fmt, $i, $mask, $name, ($on ? "ON" : ""));
+    }
+}
+
+sub display_width
+{
+  my ($bits, $base) = @_;
+  int (1 + (log (2**$bits) / log ($base)));
+}
+
+sub max
+{
+  my $x = shift;
+  map { $x = $_ if $_ > $x } @_;
+  return $x;
 }
 
 sub main
 {
-  my $recommended_mask = hex (tp_acpi_get ("hotkey_recommended_mask"));
+  trim_unsupported_mask  ();
+  init_tp_acpi_hkey_mask ();
 
-  my $x = 0;
-  map { $x |= $tp_acpi_hkey_mask{$_} } keys %tp_acpi_hkey_mask;
+  my ($writep, $hexp) = (0, 0);
+  if    (@_ && $_[0] =~ /^--hex/)   { $hexp   = 1; shift }
+  elsif (@_ && $_[0] =~ /^--write/) { $writep = 1; shift }
 
-  printf "0x%x\n", $recommended_mask ^ $x;
+  my $mask = get_hkey_mask ("hotkey_mask");
+  for my $arg (@_)
+    {
+      if    ($arg =~ /^\+(.*)/) { $mask |=   get_hkey_mask ($1)   }
+      elsif ($arg =~ /^-(.*)/)  { $mask &= ~(get_hkey_mask ($1))  }
+      elsif ($arg =~ /^=(.*)/)  { $mask  =   get_hkey_mask ($1)   }
+      else                      { $mask |=   get_hkey_mask ($arg) }
+    }
+
+  if ($writep)
+    {
+      my $file = "$tp_acpi_dir/hotkey_mask";
+      open (my $fh, "> $file") || die "open: $file: $!\n";
+      printf $fh ("0x%x\n", $mask);
+    }
+  elsif ($hexp) { printf ("0x%x\n", $mask) }
+  else          { print_hkey_mask ($mask) }
 }
 
 main (@ARGV);
