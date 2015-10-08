@@ -1,5 +1,5 @@
 #!/bin/sh
-# $Id: openvpn-ctl,v 1.3 2012/05/21 20:43:35 friedman Exp $
+# $Id: openvpn-ctl,v 1.4 2014/09/09 19:45:00 friedman Exp $
 
 usage()
 {
@@ -18,10 +18,27 @@ docmd()
     "$@"
 }
 
+sctl()
+{
+    action=$1
+    target=$2
+
+    file=/var/run/.check-openvpn
+    name=${target#openvpn@}
+    name=${name%.service}
+
+    case $action:$target in
+        *start:*splode* ) echo $name > $file ;;
+          stop:*splode* ) rm -f        $file ;;
+    esac
+
+    docmd systemctl $action $target
+}
+
 mode_target()
 {
     action=$1 target=$2
-    docmd systemctl $action $target
+    sctl $action $target
 }
 
 mode_default()
@@ -36,14 +53,14 @@ mode_default()
             case $svc in
                 openvpn@*.service )
                     system_targets=t
-                    docmd systemctl $action $svc ;;
+                    sctl $action $svc ;;
             esac
         done
     fi
 
     if [ $system_targets = nil ]; then
         get_splode_target
-        docmd systemctl $action $target
+        sctl $action $target
     fi
 }
 
