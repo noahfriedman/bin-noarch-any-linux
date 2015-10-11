@@ -1,46 +1,230 @@
-#!/bin/sh
+#!/usr/bin/perl
+# pa-set-volume --- (slightly) friendlier interface for setting pulseaudio volumes
+# Author: Noah Friedman <friedman@splode.com>
+# Created: 2015-10-13
+# Public domain.
+
 # $Id$
 
-max=65536
+$^W = 1;  # enable warnings
 
-set_volume()
+use strict;
+use Getopt::Long;
+use Pod::Usage;
+
+(my $progname = $0) =~ s|.*/||;
+
+my $step     = 5; # default percent adjustment
+my %adj_tbl  = ( increase => "+$step",  decrease => "-$step",
+                 incr     => "+$step",  decr     => "-$step",
+                 inc      => "+$step",  dev      => "-$step",
+                 up       => "+$step",  dn       => "-$step",  down => "-$step",
+                 '+'      => "+$step",  '-'      => "-$step",
+               );
+my %mute_tbl = ( mute => 'on', unmute => 'off', toggle => 'toggle' );
+
+my %opt;
+
+sub bt
 {
-  # Default 50% if not specified
-  pct=${1-50}
-  vol=$(($max * $pct / 100))
-
-  if pactl set-sink-volume 0 $vol; then
-    echo "New playback volume $pct% ($vol in [0,$max])"
-  fi
+  print STDERR join (" ", "+", @_), "\n" if $opt{verbose} > 2;
+  open (my $fh, "-|", @_) || die "exec: $_[0]: $!\n";
+  local $/ = undef;
+  return <$fh>;
 }
 
-get_volume()
+sub xsystem
 {
-  pactl list |
-  sed -n \
-      -e '/^Sink #0/!d
-          :l
-          /.*Volume: 0: \([0-9]*\)%.*/!{
-            n
-            b l
-          }
-          s//\1/p
-          q
-         '
+  print STDERR join (" ", "+", @_), "\n" if $opt{verbose} > 1;
+  system (@_);
 }
 
-main()
+sub pa_get_data
 {
-  curpct=`get_volume`
-  curvol=$(($max * $curpct / 100))
-  if [ $# -eq 0 ]; then
-    echo "Current playback volume $curpct% ($curvol in [0,$max])"
+  my $text = bt (qw(pactl list));
+
+  my %data;
+  foreach $_ (split (/\n\n+/, $text))
+    {
+      next unless /^(sink|source)\s+#/i;
+      my $dev = lc $1;
+      my $num = $1 if /^$1\s+#(\d+)/;
+
+      $data{$dev} ||= [];
+      my $elt = $data{$dev}->[$num] = {};
+
+      #$elt->{name} = $1 if /^\s+Name:\s+(\S+)/ms;
+      $elt->{vol}   = $1 if /^\s+Volume:\s+\S+:\s+(\d+)/ms;
+      $elt->{pct}   = $1 if /^\s+Volume:\s+\S+:\s+\d+\s+\/\s+(\d+)%/ms;
+      $elt->{mute}  = $1 if /^\s+Mute:\s*(\S+)/ms;
+      #$elt->{max}  = $1 if /^\s+Base Volume:\s*(\d+)/ms;
+      #$elt->{unit} = .01 * $elt->{max};
+    }
+  return \%data;
+}
+
+sub get_vars
+{
+  my ($dev, $num, $data) = @_;
+
+  $data ||= pa_get_data ();
+  die "$progname: $dev: no such device.\n" unless (exists $data->{$dev});
+
+  my $cur  = $data->{$dev}->[$num];
+  die "$progname: $num: no such $dev.\n" unless $cur;
+
+  return (map { $cur->{$_} } qw(vol pct mute));
+}
+
+sub msg
+{
+  my ($dev, $num, $odata, $ndata) = @_;
+
+  my ($ovol, $opct, $omute) = get_vars ($dev, $num, $odata);
+  my ($nvol, $npct, $nmute) = get_vars ($dev, $num, $ndata);
+
+  my $msg = sprintf ("%-10s Volume %3d%%", "$dev#$num:", $npct);
+
+  my $mstate = lc "$omute:$nmute";
+  my $mutes = "";
+  if ($opt{mute})
+    {
+      if    ($mstate eq "yes:yes") { $mutes = " [Mute ON already]" }
+      elsif ($mstate eq  "no:yes") { $mutes = " [Mute ON]" }
+      elsif ($mstate eq "yes:no")  { $mutes = " [Mute OFF]" }
+      elsif ($mstate eq  "no:no")  { $mutes = " [Mute OFF already]" }
+    }
+  elsif     ($mstate eq "yes:no")  { $mutes = " [Mute OFF]" }
+  elsif     ($nmute  eq "yes")     { $mutes = " [Mute]" }
+
+  if (-t fileno (STDOUT))
+    {
+      print $msg, $mutes, "\n";
+    }
+  elsif ($ENV{DISPLAY})
+    {
+      xsystem (qw(osd-msg pct), $npct, "Volume $npct%$mutes");
+    }
   else
-    echo "Old playback volume $curpct% ($curvol in [0,$max])"
-    set_volume "$@"
-  fi
+    {
+      xsystem (qw(logger -p daemon.info -i -s -t), $progname, $msg);
+    }
 }
 
-main "$@"
+sub parse_options
+{
+  local *ARGV = \@{$_[0]}; # modify our local arglist, not real ARGV.
+  my $help = -1;
+
+  my $parser = Getopt::Long::Parser->new;
+  $parser->configure (qw(bundling autoabbrev passthrough));
+
+  my $succ = $parser->getoptions
+    ('h|help|usage+'            => \$help,
+     'v|verbose+'               => \$opt{verbose},
+     'q|quiet'                  => sub { $opt{verbose} = 0 },
+
+     'i|sources:i@'             => \$opt{source}, #arrayraf
+     'o|sinks:i@'               => \$opt{sink},   #arrayraf
+
+     'm|mute'                   => sub { $opt{mute} = 'on'     },
+     'u|unmute'                 => sub { $opt{mute} = 'off'    },
+     't|toggle'                 => sub { $opt{mute} = 'toggle' },
+    );
+
+  $help ||= 0; # but if not set yet, we need to set it here now.
+  pod2usage (-exitstatus => 1, -verbose => 0)     unless $succ;
+  pod2usage (-exitstatus => 0, -verbose => $help) if $help >= 0;
+
+  $opt{verbose} = 1 unless defined $opt{verbose};
+
+  for (my $i = 0; $i < @ARGV; $i++)
+    {
+      my $arg = lc $ARGV[$i];
+      if (exists $mute_tbl{$arg})
+        {
+          $opt{mute} = $mute_tbl{$arg};
+          splice (@ARGV, $i, 1);
+          $i--;
+        }
+      elsif (exists $adj_tbl{$arg})
+        {
+          splice (@ARGV, $i, 1, $adj_tbl{$arg});
+        }
+    }
+
+  for my $key (qw(source sink))
+    {
+      $opt{$key} = [map { split (/\s*,\s*/, $_) } @{$opt{$key}}]
+        if $opt{$key};
+    }
+  $opt{sink} = [0] unless (defined $opt{source} || defined $opt{sink});
+}
+
+sub main
+{
+  parse_options (\@_);
+
+  my $odata = pa_get_data ();
+  for my $dev (qw(sink source))
+    {
+      next unless $opt{$dev};
+      for my $num (@{$opt{$dev}})
+        {
+          my ($ovol, $opct, $omute) = get_vars ($dev, $num, $odata);
+
+          for my $val (@_)
+            {
+              my $npct = $opct;
+              if ($val =~ /^[+-]/) { $npct += $val }
+              else                 { $npct  = $val }
+
+              xsystem ("pactl", "set-$dev-volume", $num, "$npct%");
+              xsystem ("pactl", "set-$dev-mute",   $num, "off")
+                if (lc $omute eq 'yes' && !$opt{mute});
+            }
+          xsystem ("pactl", "set-$dev-mute", $num, $opt{mute}) if $opt{mute};
+        }
+    }
+
+  if ($opt{verbose})
+    {
+      my $ndata = pa_get_data ();
+      for my $dev (qw(sink source))
+        {
+          next unless $opt{$dev};
+          for my $num (@{$opt{$dev}})
+            {
+              msg ($dev, $num, $odata, $ndata);
+            }
+        }
+    }
+}
+
+main (@ARGV);
+
+1;
+
+__END__
+
+=head1 NAME
+
+pa-set-volume - set pulseaudio output or recording volumes
+
+=head1 SYNOPSIS
+
+ -i, --sources [0{,1,...}]         -m, --mute
+ -o, --sinks   [0{,1,...}]         -u, --unmute
+                                   -t, --toggle
+
+ {increase|decrease|up|dn}  (5% increment)
+
+ or NEWVOL, one of
+
+	 pct  (absolute value, 0-100)
+	+pct  (increase by pct percent)
+	-pct  (decrease by pct percent)
+
+=cut
 
 # eof
