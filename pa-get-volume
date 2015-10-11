@@ -1,0 +1,49 @@
+#!/usr/bin/perl
+# $Id$
+
+$^W = 1;
+
+use strict;
+
+sub bt
+{
+  open (my $fh, "-|", @_) || die "exec: $_[0]: $!\n";
+  local $/ = undef;
+  return <$fh>;
+}
+
+sub main
+{
+  my $text = bt (qw(pactl list));
+
+  foreach $_ (split (/\n\n+/, $text))
+    {
+      next unless /^(sink|source)\s+#/i;
+      my $dev = lc $1;
+      my $num    = $1 if /^$dev\s+#(\d+)/i;
+      my $name   = $1 if /^\s+Name:\s+(\S+)/ms;
+      my $mute   = $1 if /^\s+Mute:\s*(\S+)/ms;
+      my $vol    = $1 if /^\s+Volume:\s+\S+:\s+(\d+)/ms;
+      my $pct    = $1 if /^\s+Volume:\s+\S+:\s+\d+\s+\/\s+(\d+)%/ms;
+      my $max    = $1 if /^\s+Base Volume:\s*(\d+)/ms;
+
+      $mute = "mute"   if $mute eq "yes";
+      $mute = "!mute"  if $mute eq "no";
+
+      if ($dev eq 'sink')
+        {
+          my $active = $1 if /^\s+Active Port:\s*(\S+)/ms;
+          printf ("%-6s %2d %6d %5d %3d%% %5s %s %s\n",
+                  $dev, $num, $vol, $max, $pct, $mute, $name, $active);
+        }
+      elsif ($dev eq 'source')
+        {
+          printf ("%-6s %2d %6d %5d %3d%% %5s %s\n",
+                  $dev, $num, $vol, $max, $pct, $mute, $name);
+        }
+    }
+}
+
+main (@ARGV);
+
+# eof
