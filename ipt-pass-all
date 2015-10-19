@@ -1,9 +1,15 @@
 #!/bin/bash
-# $Id$
+# $Id: ipt-pass-all,v 1.1 2007/07/05 05:53:33 friedman Exp $
+
+protos='iptables ip6tables'
 
 currentfilter()
 {
-  iptables -L INPUT -n | awk '/ipt-pass-all/ {print $2}'
+    {
+        for prog in $protos; do
+            $prog -L INPUT -n
+        done
+    } | grep ipt-pass-all
 }
 
 ipt()
@@ -13,7 +19,6 @@ ipt()
   shift 2
 
   set fnord \
-      ${IPTABLES-iptables} \
       $op INPUT \
       -p $proto \
       -m comment \
@@ -22,8 +27,10 @@ ipt()
       -j ACCEPT
   shift
 
-  echo + "$@"
-  "$@"
+  for prog in $protos; do
+      echo + $prog "$@"
+      $prog "$@"
+  done
 }
 
 main()
@@ -38,12 +45,26 @@ main()
 
   case $op in
     on  | allow | enable  )
-      ipt -I tcp "$@"
-      ipt -I udp "$@" ;;
+        if currentfilter > /dev/null; then
+            echo "ipt-pass-all is already enabled"
+            exit 0
+        fi
+
+        ipt -I tcp "$@"
+        ipt -I udp "$@" ;;
     off | deny  | disable )
-      ipt -D tcp "$@"
-      ipt -D udp "$@" ;;
-    * ) echo "Usage: ${0##*/} [allow|deny]" 1>&2 ; exit 1 ;;
+        if ! currentfilter > /dev/null; then
+            echo "ipt-pass-all is already disabled"
+            exit 0
+        fi
+
+        ipt -D tcp "$@"
+        ipt -D udp "$@" ;;
+    status )
+        if ! currentfilter ; then
+            echo "ipt-pass-all is disabled"
+        fi ;;
+    * ) echo "Usage: ${0##*/} [allow|deny|status]" 1>&2 ; exit 1 ;;
   esac
 }
 
