@@ -1,14 +1,15 @@
 #!/usr/bin/env perl
-# $Id: connect-bt-headset,v 1.6 2015/07/08 22:26:27 friedman Exp $
+# $Id: connect-bt-headset,v 1.7 2015/08/21 18:51:14 friedman Exp $
 
 # Connect my headset using the bloody fucking bluez5 crapware.
 
 package BTExpect ;
 
 use strict;
-use Expect;
+use warnings qw(all);
 
-use parent qw(Expect);
+use Expect;
+use base qw(Expect);
 
 our $cb = quotemeta ("\033[0;92m");
 our $ce = quotemeta ("\033[0m");
@@ -43,6 +44,7 @@ sub send
 package main;
 
 use strict;
+use warnings qw(all);
 
 sub bt_connect
 {
@@ -107,13 +109,20 @@ sub get_btmac
   # Pass in "$ENV{HOME}" rather than just $ENV{HOME}, so that appending to
   # $_ in map doesn't modify the environment variable itself, just a copy!
   map { $_ .= "/.btheadset";
-        if (-f $_) { $_ = xcat ($_); chomp; return $_; }
+        if (-f $_)
+          { $_ = xcat ($_);
+            chomp;
+            return $1 if /^\s*([0-9a-f:]+)/mi ;
+          }
       } ("$ENV{HOME}", "$ENV{HOME}/etc/misc");
   return;
 }
 
 sub main
 {
+  print get_btmac, "\n";
+  exit;
+
   return $? unless bt_connect ($_[0] || get_btmac);
 
   my $cards = xbt (qw(pactl list short cards));
