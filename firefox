@@ -1,15 +1,11 @@
 #!/bin/sh
-# $Id: firefox,v 1.7 2011/10/10 17:34:45 friedman Exp $
+# $Id: firefox,v 1.8 2015/09/07 08:52:36 friedman Exp $
 
 prog=`run-next -p "$0"`
 
 case $* in
-    *-ProfileManager* ) exec run-misc.sh "$prog" "$@" ;;
+    *-ProfileManager* ) run-misc.sh "$prog" "$@" ;;
 esac
-
-if run-misc.sh "$prog" -remote 'ping()' 2> /dev/null ; then
-    exec run-misc.sh "$prog" "$@"
-fi
 
 numscreens=`xdpyinfo | sed -n -e '/^number of screens: */s///p'`
 case $numscreens in
