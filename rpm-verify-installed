@@ -1,8 +1,9 @@
 #!/bin/sh
-# $Id$
+# $Id: rpm-verify-installed,v 1.1 2005/05/01 12:03:20 friedman Exp $
 
 while read rpm; do
-  pkg=`expr $rpm : '\(.*\)\.[^.]*\.rpm'`
-  echo "$pkg"
-  rpm --verify "$pkg"
-done < /var/log/rpmpkgs
+    case $rpm in gpg-pubkey* ) continue ;; esac
+    pkg=${rpm%.rpm}
+    echo "* $pkg"
+    rpm --verify "$pkg"
+done < ${1-/var/log/rpmpkgs}
