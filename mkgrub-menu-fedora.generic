@@ -1,17 +1,18 @@
 #!/usr/bin/env perl
-# $Id: mkgrub-menu-fedora.generic,v 1.4 2015/01/03 05:25:01 friedman Exp $
+# $Id: mkgrub-menu-fedora.generic,v 1.5 2015/01/17 00:48:04 friedman Exp $
 
 use strict;
-use POSIX;
+use warnings qw(all);
 
-$^W = 1;
+use POSIX;
 
 #my $menu_file = "/boot/grub2/grub-menu-fedora.cfg";
 my $menu_file  = "/dev/stdout";
 
 my $update_default = 0;
 
-my @options = (qw());
+my @options = (qw(threadirqs
+                  sysrq_always_enabled));
 
 my $tmpl_host = hostnick ();
 my $tmpl_part = sprintf ("(hd0,%d)", bootpart ());
@@ -44,6 +45,13 @@ sub bootpart
       return $1 if $tbl =~ m=^/\S+(\d+)\s+/boot\s=m;
     }
   return "0";
+}
+
+sub swappart
+{
+  my $tbl = xcat ("/etc/fstab");
+  return $1 if $tbl =~ m=^\s*(/\S+)\s+\S+\s+(swap)\s=m;
+  return;
 }
 
 sub hostnick
@@ -93,6 +101,12 @@ sub main
 
   if (@_ && $_[0] eq '-') { $fh = *STDOUT{IO} }
   else { open ($fh, "> $menu_file") || die "$menu_file: $!\n" }
+
+  if (-f "/etc/systemd/sleep.conf" || -d "/etc/systemd/sleep.conf.d")
+    {
+      my $swapdev = swappart();
+      push @options, "resume=$swapdev" if defined $swapdev;
+    }
 
   my $koptions = join (" ", @options);
   my @kversions = kernel_versions ();
