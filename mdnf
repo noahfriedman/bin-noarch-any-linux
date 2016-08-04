@@ -1,0 +1,122 @@
+#!/usr/bin/env python3
+# mdnf -- my dnf frontend with changes to 'search' command
+# Author: Noah Friedman <friedman@splode.com>
+# Created: 2016-08-03
+# Public domain
+
+# $Id$
+
+# Commentary:
+
+# I find it hard to read the output from 'dnf search' when results are not
+# in alphabetical order.  Its algorithm for prioritizing results isn't
+# transparent enough to make sense to me, especially when there are dozens
+# of results.  The lack of column alignment also makes it difficult to scan.
+
+# Major differences in this version:
+#	* Results are in alphabetical order
+#	* Version number, architecture, and repository are included.
+#	* Columns are aligned
+#	* Searching on architecture provided
+# 	* If multiple search terms provided then select the conjunction,
+# 	  rather than the disjunction, of the results.  That is, results
+# 	  must match all terms, not just any of them.
+#       * Output is not folded (doing so breaks pipelines)
+
+# Code:
+
+# Needed in case we have to exec this using python 2.7 on fedora 22
+from __future__ import print_function
+
+import fcntl
+import termios
+import struct
+
+def my_term_width(fd=1):
+    try:
+        buf = 'abcdefgh'
+        buf = fcntl.ioctl(fd, termios.TIOCGWINSZ, buf)
+        ret = struct.unpack(b'hhhh', buf)[1]
+        if ret == 0: return 256
+        if ret < 20: return  20
+        return ret
+    except IOError:
+        return 256
+
+# We don't use this for the search command anymore, but
+# monkeypatch it for any other commands that might try to use it.
+from dnf.cli import term
+term._term_width = my_term_width
+
+
+import dnf.match_counter
+
+def _my_search(self, args):
+    search_all = False
+    if len(args) > 1 and args[0] == 'all':
+        args.pop(0)
+        search_all = True
+        self.base.conf.showdupesfromrepos = True
+
+    counter = dnf.match_counter.MatchCounter()
+    for arg in args:
+        self._search_counted(counter, 'name',    arg)
+        self._search_counted(counter, 'arch',    arg)
+        self._search_counted(counter, 'summary', arg)
+
+    if search_all or counter.total() == 0:
+        for arg in args:
+            self._search_counted(counter, 'description', arg)
+            self._search_counted(counter, 'url',         arg)
+
+    results = counter
+    if not self.base.conf.showdupesfromrepos:
+        results = self.base.sack.query().filter(pkg=counter.keys()).latest()
+
+    allargs = set (args)
+    row = []
+    def _sort_key (key):
+        return (sorted(counter.matched_needles (key)), str(key).lower())
+    for pkg in sorted (results, key=_sort_key):
+        if counter.matched_needles (pkg) != allargs: continue
+        row.append ((pkg.name,
+                     pkg.version + '-' + pkg.release,
+                     pkg.arch,
+                     pkg.reponame,
+                     pkg.summary))
+
+    if len(row) == 0:
+        raise dnf.exceptions.Error('No matches found.')
+
+    width = [max(len(r[i]) for r in row) for i in range(len(row[0])-1)]
+    fmt = '  '.join ('%%-%ss' % w for w in width) + '  %s'
+    for r in row: print(fmt % r)
+
+# monkeypatch
+from dnf.cli.commands import search
+search.SearchCommand._search = _my_search
+
+
+import sys
+
+def suppress_keyboard_interrupt_message():
+    old_excepthook = sys.excepthook
+    def new_hook(type, value, traceback):
+        if type != KeyboardInterrupt:
+            old_excepthook(type, value, traceback)
+        else: pass
+    sys.excepthook = new_hook
+
+
+from dnf.cli import main
+
+if __name__ == "__main__":
+    suppress_keyboard_interrupt_message()
+
+    myargs = ('--cacheonly', '--quiet')
+    for arg in reversed(myargs):
+        sys.argv.insert(1, arg)
+
+    main.user_main(sys.argv[1:], exit_code=True)
+
+# eof
