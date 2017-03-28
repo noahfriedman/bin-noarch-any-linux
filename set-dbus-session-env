@@ -1,0 +1,12 @@
+#!/bin/sh
+# $Id$
+
+vars='
+    XDG_CACHE_HOME
+    XDG_CONFIG_HOME
+    XDG_DATA_HOME
+'
+
+exec dbus-update-activation-environment --systemd "$@" $vars
+
+# eof
