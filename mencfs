@@ -1,0 +1,83 @@
+#!/usr/bin/env bash
+# mencfs --- encfs wrapper for command line convenience
+# Author: Noah Friedman <friedman@splode.com>
+# Created: 2017-04-18
+# Public domain.
+
+# $Id$
+
+# Commentary:
+
+# encfs requires fully-qualified pathnames, so this fully-qualifies the
+# directory arguments.  It assumes that the source directory will be of the
+# form foo.enc and will append .enc if missing.  Destination directory is
+# optional and defaults to foo.
+
+# Any mount options to encfs should go after the source and optional target directory.
+
+# Code:
+
+# Don't juse use "cd $1 && pwd" because destination might not exist yet.
+fqpath()
+{
+    case $1 in
+        ./*  ) echo "$PWD/${1#*/}"      ;;
+        ../* ) echo "${PWD%/*}/${1#*/}" ;;
+        /*   ) echo "$1"                ;;
+        *    ) echo "$PWD${1:+/$1}"     ;;
+    esac
+}
+
+err()
+{
+    echo "${0##*/}: $*" 1>&2
+    exit 1
+}
+
+# This lets you write: apush arrayvar newval
+# instead of: ${arrayvar[${#arrayvar[@]}]}=newval
+# Because c'mon, you've got to be kidding me.
+apush() { eval "$1=(\"\${$1[@]}\" \"\${@:2}\")"; }
+
+main()
+{
+    case $# in
+        0 ) echo "Usage: ${0##*/} rootDir [mountPoint] [options] [-- [FUSE Mount Options]]" 1>&2
+            exit 1 ;;
+    esac
+
+    dstdir=`fqpath "${1%.enc}"`
+    srcdir=$dstdir.enc
+    shift
+
+    if ! [ -d "$srcdir" ]; then
+        err "source $srcdir does not exist"
+    fi
+
+    case $1 in
+        -* | '' )
+            if ! [ -d "$dstdir" ]; then
+                mkdir "$dstdir" || exit $?
+            fi ;;
+        * )
+            dstdir=`fqpath "$1"`
+            shift
+            if ! [ -d "$dstdir" ]; then
+                err "target $dstdir does not exist"
+            fi ;;
+    esac
+
+    while :; do
+        case $# in 0  ) break ;; esac
+        case $1 in -- ) break ;; esac
+        apush encfsopts "$1"
+        shift
+    done
+
+    set -x
+    exec encfs "${encfsopts[@]}" "$srcdir" "$dstdir" "$@"
+}
+
+main "$@"
+
+# eof
