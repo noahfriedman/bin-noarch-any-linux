@@ -1,4 +1,4 @@
 #!/bin/sh
-# $Id$
+# $Id: lpr-double-sided,v 1.2 2015/09/07 04:10:18 friedman Exp $
 
-exec lpr -o media=letter -o sides=two-sided-long-edge "$@"
+exec ${LPR-lp} -o media=letter -o sides=two-sided-long-edge "$@"
