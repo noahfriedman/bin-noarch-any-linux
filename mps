@@ -1,5 +1,5 @@
 #!/usr/bin/env perl
-# $Id: mps,v 1.8 2015/08/27 01:59:51 friedman Exp $
+# $Id: mps,v 1.9 2015/12/15 01:19:51 friedman Exp $
 
 $^W = 1; # enable warnings
 
@@ -15,6 +15,8 @@ my @field =             # 1 = right-justify
   ( [qw( user             0 )],
     [qw( pid              1 )],
     [qw( ppid             1 )],
+    [qw( pgid             1 )],
+    [qw( sid              1 )],
     [qw( lwp              1 )],
     [qw( nlwp=#T          1 )],
     [qw( %cpu             1 )],
