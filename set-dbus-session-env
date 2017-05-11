@@ -1,11 +1,15 @@
 #!/bin/sh
-# $Id$
+# $Id: set-dbus-session-env,v 1.1 2017/03/28 22:05:09 friedman Exp $
 
 vars='
     XDG_CACHE_HOME
     XDG_CONFIG_HOME
     XDG_DATA_HOME
 '
+
+case ${DBUS_SESSION_BUS_ADDRESS:-notset} in
+    notset ) exit 1 ;;
+esac
 
 exec dbus-update-activation-environment --systemd "$@" $vars
 
