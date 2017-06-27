@@ -4,59 +4,169 @@
 # Created: 2009-07-17
 # Public domain
 
-# $Id$
+# $Id: mfree,v 1.1 2009/07/18 00:59:56 friedman Exp $
 
 # Commentary:
 
 # This script prints a report on memory statistics similar to the
-# util-linux-ng "free" command.  The main differences are:
+# procps-ng "free" command.  The main differences are:
 #
-#   * It gets rid of the obsolete "shared" column
 #   * It always prints the "Total" row.  No "-t" flag.
-#   * Unlike the busybox variant, it shows the -/+ buffers/cache line.
+#
+# For the older-style output format from util-linux-ng:
+#   * It gets rid of the useless "shared" column
+#   * Unlike the busybox variant, it shows the -/+ buffers/cache line
 #
 # The only external command this script depends on is the coreutils/busybox
 # "printf" command, for formatting.  I can't stand the idea of inlining that.
 
 # Code:
 
-# For android busybox; should be harmless elsewhere
-PATH=/system/xbin/bb:$PATH
+getmeminfo()
+{
+    # Don't redirect the while loop directly, because that may put the loop
+    # in a subshell in some bourne implementations.
+    exec < /proc/meminfo
+    while read key val ign ; do
+        case $key in
+            *'('* ) key=`filtername "$key" '(' ')'` ;;
+        esac
+        key=${key%:}
+        # Scale only on output, see mprintf.
+        # This improves accuracy of computed values
+        #val=$((val $op factor))
+        eval $key=$val
+    done
 
-op=* factor=1
-case $1 in
-  -b* ) op=* factor=1024 ;;
-  -k* ) ;; # default
-  -m* ) op=/ factor=1024 ;;
-  -g* ) op=/ factor=$((1024 * 1024)) ;;
-esac
+    # low==main except with large-memory support
+    case ${LowTotal:-0} in
+        0 ) LowTotal=$MemTotal LowFree=$MemFree ;;
+    esac
 
-exec < /proc/meminfo
-while read key val ign ; do
-  case $key in
-    *'('* ) continue ;;
-  esac
-  key=${key%:}
-  val=$((val $op factor))
-  eval $key=$val
-done
+    # Derived values
+    MemCached=$((Cached    + Slab))
+      MemUsed=$((MemTotal  - MemFree - MemCached - Buffers))
+     SwapUsed=$((SwapTotal - SwapFree))
+      LowUsed=$((LowTotal  - LowFree))
+     HighUsed=$((HighTotal - HighFree))
 
-  MemUsed=$((MemTotal - MemFree))
-MemNCFree=$((MemFree + Buffers + Cached))
-   MemUNC=$((MemUsed - Buffers - Cached))
- SwapUsed=$((SwapTotal - SwapFree))
+        Total=$((MemTotal  + SwapTotal))
+    TotalUsed=$((MemUsed   + SwapUsed))
+    TotalFree=$((MemFree   + SwapFree))
 
-    Total=$((MemTotal + SwapTotal))
-TotalUsed=$((MemUsed  + SwapUsed))
-TotalFree=$((MemFree  + SwapFree))
+    case ${MemAvailable:-0} in
+        0 ) minfile=/proc/sys/vm/min_free_kbytes
+            if [ -f "$minfile" ]; then
+                read MinFree < $minfile
+                # Should be equal to sum of all 'low' fields in /proc/zoneinfo
+                watermark_low=$((MinFree * 5 / 16))
 
-  fmt="%-6s%12s%11s%11s%11s%11s\n"
-fmtbc="%-0s%11s%11s%11s%11s%11s\n"
+                MemAvailable=$((MemFree - watermark_low
+                                + Inactivefile + Activefile
+                                - `min $(( (Inactivefile + Activefile) / 2 )) $watermark_low`
+                                + SReclaimable - `min $(( SReclaimable / 2 )) $watermark_low`
+                               ))
+            else
+                MemAvailable=$MemFree  # kernel 2.6.26 and earlier
+            fi ;;
+    esac
+}
 
-printf "$fmt"   ""             total       used       free    buffers     cached
-printf "$fmt"   Mem:       $MemTotal   $MemUsed   $MemFree   $Buffers    $Cached
-printf "$fmtbc" "-/+ buffers/cache:"    $MemUNC $MemNCFree
-printf "$fmt"   Swap:     $SwapTotal  $SwapUsed  $SwapFree
-printf "$fmt"  Total:         $Total $TotalUsed $TotalFree
+print_old()
+{
+      MemUsed=$((MemTotal - MemFree))  # Not accurate, but historical
+    TotalUsed=$((MemUsed  + SwapUsed))
+
+    MemNCFree=$((MemFree + Buffers + Cached))
+       MemUNC=$((MemUsed - Buffers - Cached))
+
+     fmtw="%-6s $w$w$w$w$w\n"
+      fmt="%-6s $w$w$w\n"
+    fmtbc="%s $w$w\n"
+
+      fmtw="%-6s%12s%12s%12s%12s%12s\n"
+       fmt="%-6s%12s%12s%12s\n"
+     fmtbc="%-6s%12s%12s\n"
+
+    mprintf "$fmtw"  ""             total       used       free  buffers  cached
+    mprintf "$fmtw"  Mem:       $MemTotal   $MemUsed   $MemFree $Buffers $Cached
+    mprintf "$fmtbc" "-/+ buffers/cache:"    $MemUNC $MemNCFree
+    mprintf "$fmt"   Swap:     $SwapTotal  $SwapUsed  $SwapFree
+    mprintf "$fmt"  Total:         $Total $TotalUsed $TotalFree
+}
+
+print_new()
+{
+     fmtw="%-6s$w$w$w$w$w$w$w\n"
+      fmt="%-6s$w$w$w\n"
+
+    mprintf "$fmtw"  ""         total       used       free shared  buffers      cache         avail
+    mprintf "$fmtw"  Mem:   $MemTotal   $MemUsed   $MemFree $Shmem $Buffers $MemCached $MemAvailable
+   #mprintf "$fmt"   Low:   $LowTotal   $LowUsed   $LowFree
+   #mprintf "$fmt"   High: $HighTotal  $HighUsed  $HighFree
+    mprintf "$fmt"   Swap: $SwapTotal  $SwapUsed  $SwapFree
+    mprintf "$fmt"  Total:     $Total $TotalUsed $TotalFree
+}
+
+mprintf()
+{
+    printf "$1" "$2" `shift; shift; scale_args "$@"`
+}
+
+scale_args()
+{
+    for val in "$@"; do
+        case $val in
+            [0-9]* ) echo $((val $op factor)) ;;
+            *      ) echo "$val" ;;
+        esac
+    done
+}
+
+min()
+{
+    low=$1
+    shift
+    for arg in "$@"; do
+        if [ "$arg" -lt "$low" ]; then
+            low=$arg
+        fi
+    done
+    echo "$low"
+}
+
+filtername()
+{
+    key=$1
+    shift
+    for c in "$@"; do
+        while :; do
+            case $key in
+                *${c}* ) key=${key%$c*}${key#*$c} ;;
+                *      ) break ;;
+            esac
+        done
+    done
+    echo "$key"
+}
+
+main()
+{
+    # For android busybox; should be harmless elsewhere
+    PATH=/system/xbin/bb:$PATH
+
+    op=* factor=1 w=%9s
+    case $1 in
+        -b* ) op=* factor=1024 w=%12s ;;
+        -k* ) : ;; # default
+        -m* ) op=/ factor=1024 ;;
+        -g* ) op=/ factor=$((1024 * 1024)) ;;
+    esac
+
+    getmeminfo
+    print_${MFREESTYLE-new}
+}
+
+main "$@"
 
 # eof
