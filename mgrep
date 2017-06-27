@@ -1,0 +1,25 @@
+#!/bin/sh
+# $Id$
+
+options=(--perl-regexp
+
+         --devices=skip
+         --directories=recurse
+
+         --line-number
+         --initial-tab
+
+         --exclude='*~'
+         --exclude=COPYING
+         --exclude=LICENSE
+
+         --exclude-dir=CVS
+         --exclude-dir=.bzr
+         --exclude-dir=.git
+         --exclude-dir=.hg
+         --exclude-dir=.svn
+      )
+
+exec grep "${options[@]}" "$@"
+
+# eof
