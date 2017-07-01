@@ -4,21 +4,26 @@
 # Created: 2009-07-17
 # Public domain
 
-# $Id: mfree,v 1.1 2009/07/18 00:59:56 friedman Exp $
+# $Id: mfree,v 1.2 2017/06/27 01:13:27 friedman Exp $
 
 # Commentary:
 
 # This script prints a report on memory statistics similar to the
 # procps-ng "free" command.  The main differences are:
 #
-#   * It always prints the "Total" row.  No "-t" flag.
+#   * Default output is "human readable", with unit suffixes.
+#   * Try to provide up to 4 significant digits, including decimal fractions.
 #
 # For the older-style output format from util-linux-ng:
-#   * It gets rid of the useless "shared" column
+#   * It gets rid of the useless "shared" column that was always 0
 #   * Unlike the busybox variant, it shows the -/+ buffers/cache line
 #
 # The only external command this script depends on is the coreutils/busybox
 # "printf" command, for formatting.  I can't stand the idea of inlining that.
+# It will use dc or bc if they are around, otherwise it will approximate inline.
+#
+# The busybox sh and mksh on older versions of android may overflow on
+# some of the multiplication operations.
 
 # Code:
 
@@ -42,6 +47,9 @@ getmeminfo()
     case ${LowTotal:-0} in
         0 ) LowTotal=$MemTotal LowFree=$MemFree ;;
     esac
+
+    HighTotal=${HighTotal:-0}
+     HighFree=${HighFree:-0}
 
     # Derived values
     MemCached=$((Cached    + Slab))
@@ -88,11 +96,19 @@ print_old()
        fmt="%-6s%12s%12s%12s\n"
      fmtbc="%-6s%12s%12s\n"
 
-    mprintf "$fmtw"  ""             total       used       free  buffers  cached
-    mprintf "$fmtw"  Mem:       $MemTotal   $MemUsed   $MemFree $Buffers $Cached
-    mprintf "$fmtbc" "-/+ buffers/cache:"    $MemUNC $MemNCFree
-    mprintf "$fmt"   Swap:     $SwapTotal  $SwapUsed  $SwapFree
-    mprintf "$fmt"  Total:         $Total $TotalUsed $TotalFree
+    hsize=o
+    mprintf "$fmtw"  ""         total       used       free  buffers  cached
+    mprintf "$fmtw"  Mem:   $MemTotal   $MemUsed   $MemFree $Buffers $Cached
+    case $show_lohi in t )
+    mprintf "$fmt"   Low:   $LowTotal   $LowUsed   $LowFree
+    mprintf "$fmt"   High: $HighTotal  $HighUsed  $HighFree ;;
+    esac
+    mprintf "$fmtbc" "-/+ buffers/cache:" $MemUNC $MemNCFree
+    mprintf "$fmt"   Swap: $SwapTotal  $SwapUsed  $SwapFree
+
+    case $show_total in t )
+    mprintf "$fmt"  Total:     $Total $TotalUsed $TotalFree ;;
+    esac
 }
 
 print_new()
@@ -102,10 +118,20 @@ print_new()
 
     mprintf "$fmtw"  ""         total       used       free shared  buffers      cache         avail
     mprintf "$fmtw"  Mem:   $MemTotal   $MemUsed   $MemFree $Shmem $Buffers $MemCached $MemAvailable
-   #mprintf "$fmt"   Low:   $LowTotal   $LowUsed   $LowFree
-   #mprintf "$fmt"   High: $HighTotal  $HighUsed  $HighFree
+
+    case $show_lohi in t )
+    mprintf "$fmt"   Low:   $LowTotal   $LowUsed   $LowFree
+    mprintf "$fmt"   High: $HighTotal  $HighUsed  $HighFree ;;
+    esac
+
+    # Should we skip the swap line if there is no swap?
+    #case ${SwapTotal:-0} in 0 ) : ;; * )
     mprintf "$fmt"   Swap: $SwapTotal  $SwapUsed  $SwapFree
-    mprintf "$fmt"  Total:     $Total $TotalUsed $TotalFree
+    #esac
+
+    case $show_total in t )
+    mprintf "$fmt"  Total:     $Total $TotalUsed $TotalFree ;;
+    esac
 }
 
 mprintf()
@@ -113,12 +139,67 @@ mprintf()
     printf "$1" "$2" `shift; shift; scale_args "$@"`
 }
 
+fscale()
+{
+    if type -p dc > /dev/null; then
+        if [ -f /system/build.prop ]; then
+            # Android: busybox's dc doesn't support precision
+            nval=`echo "$1 $3 $2 p" | dc`
+        else
+            nval=`echo "2 k $1 $3 $2 p" | dc`
+        fi
+    elif type -p bc > /dev/null; then
+        nval=`echo "scale=2; $1 $2 $3" | bc`
+    else
+        nval=$(($1 $2 $3))
+        if [ $nval -lt 100 ] && [ "$4" != "B" ]; then
+            nval=$(($1 * 100 $2 $3))
+            case ${nval:2:2} in
+                0* ) nval=${nval:0:2}  ;;
+                *  ) nval=${nval:0:2}.${nval:2:2} ;;
+            esac
+        fi
+    fi
+
+    frac=${nval#*.}
+    nval=${nval%.*}
+    case ${#nval}:$frac in
+        *:0*    ) nval=${nval:-0} ;;
+        [1-3]:* ) nval=${nval:-0}.${frac:0:2} ;;
+        *:*     ) nval=${nval:-0} ;;
+    esac
+    echo $nval$4
+}
+
 scale_args()
 {
     for val in "$@"; do
-        case $val in
-            [0-9]* ) echo $((val $op factor)) ;;
-            *      ) echo "$val" ;;
+        case $hsize:$val in
+            t:[0-9]* )
+                if [ $val -eq 0 ]; then echo ${val}B; continue; fi
+
+                # starts out as kibytes; expand
+                val=$((val * 1024))
+                set B K M G T P E
+
+                local f=1
+                while [ $((val / f)) -gt $minprecis ]; do
+                    f=$((f * mult))
+                    shift
+                done
+                fscale $val / $f $1 ;;
+
+            f:[0-9]* )
+                if [ $val -eq 0 ]; then echo $val; continue; fi
+                local nval=$((val $op factor))
+                if [ $nval -lt $minprecis ]; then
+                    fscale $val "$op" $factor
+                else
+                    echo $nval
+                fi ;;
+
+            o:[0-9]* ) echo $((val $op factor)) ;;
+            *        ) echo "$val" ;;  # text; preserve whitespace
         esac
     done
 }
@@ -150,21 +231,77 @@ filtername()
     echo "$key"
 }
 
+splitopt()
+{
+    local arg
+    for arg in "$@"; do
+        local i=0
+        while [ $i -lt ${#arg} ]; do
+            echo " -${arg:$i:1}"
+            i=$((i + 1))
+        done
+    done
+}
+
 main()
 {
     # For android busybox; should be harmless elsewhere
     PATH=/system/xbin/bb:$PATH
 
-    op=* factor=1 w=%9s
-    case $1 in
-        -b* ) op=* factor=1024 w=%12s ;;
-        -k* ) : ;; # default
-        -m* ) op=/ factor=1024 ;;
-        -g* ) op=/ factor=$((1024 * 1024)) ;;
-    esac
+    op=* factor=1 w=%9s hsize=t mult=1024 output=new
+    while :; do
+        case $1 in
+            -o | --old    ) output=old ;;
+            -n | --new    ) output=new ;;
 
-    getmeminfo
-    print_${MFREESTYLE-new}
+                 --pow2   ) mult=1024 ;;
+                 --si     ) mult=1000 ;;
+            -p | --precis ) minprecis=$2 ; shift ;;
+
+            -h | --human  ) hsize=t ;;
+            -b | --bytes  ) hsize=f op=* factor='$mult' w=%12s ;;
+            -k | --kilo   ) hsize=f ;;
+            -m | --mega   ) hsize=f op=/ factor='$mult' ;;
+            -g | --giga   ) hsize=f op=/ factor='$((mult * mult))' ;;
+
+            -l | --lohi   ) show_lohi=t ;;
+            -t | --total  ) show_total=t ;;
+
+            -s | --sec*   ) repeat_interval=$2 ; shift ;;
+            -c | --count  ) repeat_count=$2 ; shift ;;
+
+            -- | --* ) break ;;
+            -??* )
+                local arg=$1; shift
+                set . `splitopt "${arg#-}"` "$@"
+                shift; continue ;;
+            * ) break ;;
+        esac
+        shift
+    done
+
+    # computed value of factor was delayed in case mult is switched to SI
+    factor=`eval echo "$factor"`
+    #minprecis=${minprecis-$((5 * mult / 3))} # 1.75x; 1706 or SI:1666
+    minprecis=${minprecis-9999}
+
+    case $repeat_interval:$repeat_count in
+        : ) getmeminfo; print_$output ;;
+
+        [0-9]*: )
+            while :; do
+                getmeminfo; print_$output
+            done ;;
+
+        *:[0-9] )
+            repeat_interval=${repeat_interval:-1}
+            while [ $repeat_count -gt 1 ]; do
+                repeat_count=$((repeat_count - 1))
+                getmeminfo; print_$output; echo
+                sleep $repeat_interval
+            done
+            getmeminfo; print_$output ;;
+    esac
 }
 
 main "$@"
