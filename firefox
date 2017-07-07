@@ -1,10 +1,10 @@
 #!/bin/sh
-# $Id: firefox,v 1.8 2015/09/07 08:52:36 friedman Exp $
+# $Id: firefox,v 1.9 2016/05/24 20:37:00 friedman Exp $
 
 prog=`run-next -p "$0"`
 
 case $* in
-    *-ProfileManager* ) run-misc.sh "$prog" "$@" ;;
+    *-ProfileManager* ) exec run-misc.sh "$prog" "$@" ;;
 esac
 
 numscreens=`xdpyinfo | sed -n -e '/^number of screens: */s///p'`
