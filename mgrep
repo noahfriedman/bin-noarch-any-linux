@@ -1,5 +1,7 @@
 #!/bin/sh
-# $Id$
+# $Id: mgrep,v 1.1 2017/06/27 19:07:32 friedman Exp $
+
+# Add -I or --binary-files=without-match skip binary files
 
 options=(--perl-regexp
 
@@ -10,6 +12,8 @@ options=(--perl-regexp
          --initial-tab
 
          --exclude='*~'
+         --exclude='*.elc'
+         --exclude='*.[oa]'
          --exclude=COPYING
          --exclude=LICENSE
 
@@ -18,6 +22,8 @@ options=(--perl-regexp
          --exclude-dir=.git
          --exclude-dir=.hg
          --exclude-dir=.svn
+
+         #--color=auto
       )
 
 exec grep "${options[@]}" "$@"
