@@ -1,8 +1,28 @@
-#!/bin/sh
-# $Id: xinit,v 1.1 2015/09/09 02:23:34 friedman Exp $
+#!/bin/bash
+# $Id: xinit,v 1.2 2015/09/10 01:38:38 friedman Exp $
 
-XSERVERRC=${XSERVERRC:-$HOME/etc/init/share/xserverrc}
-export XSERVERRC
+deffirst()
+{
+    local var=$1 ; shift
+    local file
+
+    case ${!var-notset} in
+        notset )
+            for file in "$@"; do
+                if test -f "$file"; then
+                    eval export $var=\""$file"\"
+                    return 0
+                fi
+            done
+            return 1 ;;
+    esac
+    return 0
+}
+
+sinit=${sinit-$HOME/etc/init}
+
+deffirst XINITRC   $HOME/.xinitrc   $sinit/share/xinitrc
+deffirst XSERVERRC $HOME/.xserverrc $sinit/share/xserverrc
 
 exec run-next "$0" "$@"
 
