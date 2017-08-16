@@ -1,30 +1,49 @@
 #!/bin/bash
-# $Id: screen,v 1.2 2010/06/12 03:19:02 friedman Exp $
+# $Id: screen,v 1.3 2010/06/12 03:35:58 friedman Exp $
 
-SHLVL=0
-LC_CTYPE=en_US.UTF-8
-export SHLVL LC_CTYPE
+deffirst()
+{
+    local var=$1 ; shift
+    local file
 
-terminfodirs="
-  $HOME/lib/terminfo
-  /usr/share/terminfo
-  /usr/lib/terminfo
-  /opt/lude/lib/terminfo
-"
-for d in $terminfodirs; do
-  if [ -f $d/s/screen-bce-256color ]; then
-    TERMINFO=$d
-    export TERMINFO
-    break
-  fi
-done
+    case ${!var-notset} in
+        notset )
+            for file in "$@"; do
+                if test -f "$file"; then
+                    eval export $var=\""$file"\"
+                    return 0
+                fi
+            done
+            return 1 ;;
+    esac
+    return 0
+}
 
-for screen in /opt/lude/bin/screen /usr/bin/screen ; do
-  if [ -x $screen ]; then
-    exec -a screen $screen "$@"
-  fi
-done
+main()
+{
+    SHLVL=0
+    LC_CTYPE=en_US.UTF-8
+    export SHLVL LC_CTYPE
 
-exec run-next "$0" "$@"
+    deffirst SCREENRC $HOME/.screenrc \
+                      ${sinit-$HOME/etc/init}/share/screenrc
+
+    term=s/screen-bce-256color
+    deffirst TERMINFO $HOME/lib/terminfo/$term \
+                      /usr/share/terminfo/$term \
+                      /usr/lib/terminfo/$term \
+                      /opt/lude/lib/terminfo/$term
+    TERMINFO=${TERMINFO%/$term}
+
+    for screen in /opt/lude/bin/screen /usr/bin/screen ; do
+        if [ -x $screen ]; then
+            exec -a screen $screen "$@"
+        fi
+    done
+
+    exec run-next "$0" "$@"
+}
+
+main "$@"
 
 # eof
