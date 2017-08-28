@@ -1,5 +1,5 @@
 #!/usr/bin/perl
-# $Id$
+# $Id: mlslk,v 1.1 2017/08/28 00:39:52 friedman Exp $
 # Public domain
 
 use strict;
@@ -139,7 +139,7 @@ sub proc_locks
         {
           $elt{len} = $elt{off_end} - $elt{off_beg} + 1;
 
-          if ($elt{off_beg} > $elt{filesize})
+          if ($elt{filesize} ne '?' && $elt{off_beg} > $elt{filesize})
             {
               # sqlite creates locks at distant offsets:
               #   pending        = 0x40000000
@@ -193,7 +193,9 @@ sub print_locks
   map { my $elt = $_;
         printf $fmt, map { $elt->{$_} } @k;
       } sort { $a->{pid} <=> $b->{pid} ||
-               $a->{fd}  <=> $b->{fd}
+               ($a->{fd} eq '?' || $b->{fd} eq '?'
+                ? $a->{fd} cmp $b->{fd}
+                : $a->{fd} <=> $b->{fd})
              } @$locks;
 }
 
