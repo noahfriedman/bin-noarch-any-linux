@@ -1,0 +1,209 @@
+#!/usr/bin/perl
+# $Id$
+# Public domain
+
+use strict;
+use warnings qw(all);
+
+my %pfield = ( enforced => { MANDATORY => 1,
+                             MSNFS     => 1,
+                             ADVISORY  => 0, },
+
+               rw       => { RW        => 'rw',
+                             READ      => 'r',
+                             WRITE     => 'w',
+                             NONE      => 'n', },
+             );
+
+my %mountinfo;
+
+sub max
+{
+  my $x;
+  while (@_ && !defined $x) { $x = shift }
+  map { $x = $_ if defined $_ && $_ > $x } @_;
+  return $x;
+}
+
+# split a single device number into high and low halves,
+# or combine high and low to a single number.
+sub devfrob
+{
+  return unless @_;
+  return (($_[0] << 8) | $_[1]) if @_ > 1;
+  return (($_[0] >> 8), ($_[0] & ~0xff00));
+}
+
+sub file_contents
+{
+  open (my $fh, $_[0]) || die "$_[0]: $!";
+  local $/ = undef;
+  scalar <$fh>;
+}
+
+# Fields:
+# (0) mount ID:  unique identifier of the mount (may be reused after umount)
+# (1) parent ID:  ID of parent (or of self for the top of the mount tree)
+# (2) major:minor:  value of st_dev for files on filesystem
+# (3) root:  root of the mount within the filesystem
+# (4) mount point:  mount point relative to the process's root
+# (5) mount options:  per mount options
+# (6) optional fields:  zero or more fields of the form "tag[:value]"
+# (7*) separator:  marks the end of the optional fields
+# (8*) filesystem type:  name of filesystem of the form "type[.subtype]"
+# (9*) mount source:  filesystem specific information or "none"
+# (10*) super options:  per super block options
+sub init_mountinfo
+{
+  local $_ = file_contents ("/proc/self/mountinfo");
+  foreach $_ (split (/\n+/, $_))
+    {
+      my @tok = split (/\s+/, $_);
+      my $dev = devfrob (split (/:/, $tok[2]));
+      next if exists $mountinfo{$dev};
+
+      my $mnt = $tok[4];
+
+      splice (@tok, 0, 6);              # skip to start of tags
+      shift @tok until $tok[0] eq '-';  # skip optional tagged fields
+      my $devname = $tok[2];
+
+      $mountinfo{$dev} = [$mnt, $devname];
+    }
+}
+
+sub find_filesystem
+{
+  init_mountinfo() unless %mountinfo;
+
+  my $elt = shift;
+  my $dev = devfrob ($elt->{dev_maj}, $elt->{dev_min});
+
+  $elt->{file} = sprintf ("%s/? (%s)", @{$mountinfo{$dev}});
+  $elt->{filesize} = "?";
+  $elt->{fd} = '?';
+}
+
+sub find_locked_file
+{
+  my $elt = shift;
+
+  my $pid = $elt->{pid};
+  my $ino = $elt->{dev_ino};
+  my $dev = devfrob ($elt->{dev_maj}, $elt->{dev_min});
+
+  for my $fd (</proc/$pid/fd/*>)
+    {
+      my @st = stat $fd;  # 0=dev 1=ino 7=size
+      if ($st[1] == $ino && $st[0] == $dev)
+        {
+          ($elt->{fd} = $fd) =~ s=.*/==;
+          $elt->{file} = readlink ($fd);
+          $elt->{filesize} = $st[7];
+          last;
+        }
+    }
+  find_filesystem ($elt) unless defined $elt->{file};
+}
+
+sub proc_locks
+{
+  local $_ = file_contents ("/proc/locks");
+
+  my (%w, @locks);
+  foreach $_ (split (/\n+/, $_))
+    {
+      my @l = split (/[\s:]+/, $_);
+      my @m = ($l[0],
+               $l[1],
+               $pfield{enforced}->{$l[2]},
+               $pfield{rw}->{$l[3]} || '?',
+               $l[4],
+               $l[5] eq '<none>' ? 0 : hex ($l[5]),
+               hex ($l[6]),
+               $l[7],
+               $l[8],
+               $l[9], );
+      my %elt;
+      @elt{qw(n type enforced rw pid dev_maj dev_min dev_ino off_beg off_end)} = @m;
+      $elt{type}   = substr ($elt{type}, 0, 1);
+      $elt{devstr} = join (",", @elt{qw(dev_maj dev_min)});
+      chomp ($elt{procname} = file_contents ("/proc/$elt{pid}/comm"));
+
+      find_locked_file (\%elt);
+
+      if ($elt{off_end} eq 'EOF')
+        #{ $elt{len} = $elt{type} eq 'F' ? "-" : $elt{filesize} }
+        { $elt{len} = '-' }
+      else
+        {
+          $elt{len} = $elt{off_end} - $elt{off_beg} + 1;
+
+          if ($elt{off_beg} > $elt{filesize})
+            {
+              # sqlite creates locks at distant offsets:
+              #   pending        = 0x40000000
+              #   reserved       = pending + 1
+              #   shared_first   = pending + 2
+              # We're not actually trying to interpret any data here, but
+              # since sqlite is used pervasively enough and those pending
+              # offsets are fairly large, print offsets in hex whenever
+              # they exceed the size of the file.
+              $elt{off_beg} = sprintf ("%#x", $elt{off_beg});
+              $elt{off_end} = sprintf ("%#x", $elt{off_end});
+            }
+        }
+
+      map { $w{$_} = max ($w{$_}, length $elt{$_}) } keys %elt;
+      push @locks, \%elt;
+    }
+  return (\%w, [reverse @locks]);
+}
+
+my @cols = (qw(procname PROC),
+            qw(pid      PID),
+            qw(devstr   DEV),
+            qw(dev_ino  INO),
+            qw(type     K),
+            qw(rw       RW),
+            qw(enforced M),
+            qw(filesize FSIZE),
+            qw(off_beg  BEG),
+            qw(off_end  END),
+            qw(len      LEN),
+            qw(fd       FD),
+            qw(file     NAME));
+
+sub print_locks
+{
+  my ($w, $locks) = @_;
+
+  my (@k, @h);
+  {
+    my @c = @cols;
+    while (@c) { push @k, shift @c; push @h, shift @c; }
+  }
+
+  map { $w->{$_} = 0 - $w->{$_} } (qw(procname file));
+  $w->{rw} += 1;
+
+  my $fmt = join ("  ", map { "%$w->{$_}s" } @k) . "\n";
+  printf $fmt, @h;
+
+  map { my $elt = $_;
+        printf $fmt, map { $elt->{$_} } @k;
+      } sort { $a->{pid} <=> $b->{pid} ||
+               $a->{fd}  <=> $b->{fd}
+             } @$locks;
+}
+
+sub main
+{
+  my ($widths, $locks)  = proc_locks();
+  map { find_locked_file ($_) } @$locks;
+  print_locks ($widths, $locks);
+}
+
+main (@ARGV);
+
+# eof
