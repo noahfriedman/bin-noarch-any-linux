@@ -1,22 +1,16 @@
 #!/bin/sh
-# $Id: firefox,v 1.9 2016/05/24 20:37:00 friedman Exp $
+# $Id: firefox,v 1.10 2017/07/07 03:14:09 friedman Exp $
 
 prog=`run-next -p "$0"`
+ffox() { exec run-misc.sh "$prog" "$@"; }
 
-case $* in
-    *-ProfileManager* ) exec run-misc.sh "$prog" "$@" ;;
-esac
+case $* in *-ProfileManager* ) ffox "$@" ;; esac
 
 numscreens=`xdpyinfo | sed -n -e '/^number of screens: */s///p'`
-case $numscreens in
-    1 ) exec run-misc.sh "$prog" "$@" ;;
+case $numscreens$DISPLAY in
+    2:*.0 ) ffox -P firefox     "$@" ;;
+    2:*.1 ) ffox -P firefox.2nd "$@" ;;
+    * ) ffox "$@" ;;
 esac
-
-case $DISPLAY in
-    :*.0 ) set fnord -P firefox     "$@"; shift ;;
-    :*.1 ) set fnord -P firefox.2nd "$@"; shift ;;
-esac
-
-exec run-misc.sh "$prog" "$@"
 
 # eof
