@@ -1,0 +1,8 @@
+#!/bin/sh
+# $Id$
+
+for rpm in "$@"; do
+    rpm2cpio "$rpm" | cpio --quiet --to-stdout -i '*.spec'
+done
+
+# eof
