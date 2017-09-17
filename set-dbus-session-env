@@ -1,16 +1,26 @@
 #!/bin/sh
-# $Id: set-dbus-session-env,v 1.1 2017/03/28 22:05:09 friedman Exp $
+# $Id: set-dbus-session-env,v 1.2 2017/05/11 19:30:41 friedman Exp $
 
 vars='
     XDG_CACHE_HOME
     XDG_CONFIG_HOME
     XDG_DATA_HOME
+
+    FREETYPE_PROPERTIES
 '
 
-case ${DBUS_SESSION_BUS_ADDRESS:-notset} in
-    notset ) exit 1 ;;
-esac
+havecmd() { type "$@" > /dev/null 2>&1; }
 
-exec dbus-update-activation-environment --systemd "$@" $vars
+dbuscmd=dbus-update-activation-environment
+usedcmd=${DBUS_SESSION_BUS_ADDRESS:+yes}
+if havecmd $dbuscmd && [ .$usedcmd = .yes ]; then
+    exec $dbuscmd --systemd "$@" $vars
+fi
+
+if havecmd systemctl; then
+    exec systemctl --user import-environment "$@" $vars
+fi
+
+exit 1
 
 # eof
