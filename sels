@@ -1,5 +1,5 @@
 #!/usr/bin/env perl
-# $Id: sels,v 1.1 2010/02/24 02:09:14 friedman Exp $
+# $Id: sels,v 1.2 2011/10/10 05:10:28 friedman Exp $
 
 $^W = 1; # enable warnings
 
@@ -36,7 +36,12 @@ sub startproc
 
 sub main
 {
-  my @lscmd = qw(/bin/ls --lcontext);
+  # In older versions of ls that still understood --lcontext
+  # (e.g. coreutils 8.12), "-lZ" and "-Zl" would print different columns!
+  # The former would omit nlinks, size, and timestamp, and would display
+  # the selinux context *after* user and group.
+  # By coreutils 8.12 this seems to be fixed, but use -Zl for compatibility.
+  my @lscmd = qw(/bin/ls -Zl);
   push @lscmd, @_;
 
   my $fh = startproc (@lscmd);
