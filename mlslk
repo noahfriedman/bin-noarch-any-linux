@@ -1,5 +1,5 @@
 #!/usr/bin/perl
-# $Id: mlslk,v 1.1 2017/08/28 00:39:52 friedman Exp $
+# $Id: mlslk,v 1.2 2017/08/28 22:51:06 friedman Exp $
 # Public domain
 
 use strict;
@@ -181,7 +181,11 @@ sub print_locks
   my (@k, @h);
   {
     my @c = @cols;
-    while (@c) { push @k, shift @c; push @h, shift @c; }
+    while (@c)
+      {
+        $w->{$c[0]} = max ($w->{$c[0]}, length $c[1]);
+        push @k, shift @c; push @h, shift @c;
+      }
   }
 
   map { $w->{$_} = 0 - $w->{$_} } (qw(procname file));
