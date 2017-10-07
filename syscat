@@ -1,0 +1,48 @@
+#!/bin/bash
+# syscat --- display the values of pseudofiles under /sys
+# Author: Noah Friedman <friedman@splode.com>
+# Created: 2017-10-06
+# Public domain
+
+# $Id$
+
+apush() { eval "$1=(\"\${$1[@]}\" \"\${@:2}\")"; }
+
+main()
+{
+    unset LANG ${!LC*}
+    export LC_ALL=C
+
+    shopt -s dotglob
+
+    rec='-maxdepth 0' bin=-I
+    while :; do
+        case $1 in
+            -r        ) shift; rec=          ;;
+            -b        ) shift; bin=-a        ;;
+            -rb | -br ) shift; bin=-a rec= ;;
+            *         ) break ;;
+        esac
+    done
+
+    declare -a parm
+    case $#:$rec in
+        0:  ) parm=(*) ;;
+        0:* ) for arg in *; do
+                  test  -f "$arg" && apush parm "$arg"
+              done ;;
+        *:* ) parm=("$@") ;;
+    esac
+
+    find "${parm[@]}" $rec -type f -print0 2>/dev/null \
+        | sort -z \
+        | xargs -0 --no-run-if-empty egrep -H $bin '^.?' 2>/dev/null \
+        | { if type fmtcols > /dev/null 2>&1
+            then fmtcols -s : -S ' : ' -n2
+            else column  -s : -o ' : ' -t
+            fi; }
+}
+
+main "$@"
+
+# eof
