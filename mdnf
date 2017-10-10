@@ -4,7 +4,7 @@
 # Created: 2016-08-03
 # Public domain
 
-# $Id$
+# $Id: mdnf,v 1.1 2016/08/04 06:14:50 friedman Exp $
 
 # Commentary:
 
@@ -61,8 +61,8 @@ def _my_search(self, args):
     counter = dnf.match_counter.MatchCounter()
     for arg in args:
         self._search_counted(counter, 'name',    arg)
-        self._search_counted(counter, 'arch',    arg)
         self._search_counted(counter, 'summary', arg)
+        #self._search_counted(counter, 'arch',    arg)
 
     if search_all or counter.total() == 0:
         for arg in args:
