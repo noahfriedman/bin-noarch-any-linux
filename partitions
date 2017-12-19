@@ -1,0 +1,21 @@
+#!/bin/sh
+# $Id$
+
+i=0
+op=--show
+sep='########################################'
+
+case $1 in
+    -* ) op=$1 ; shift ;;
+esac
+
+for img in "$@"; do
+    partx --verbose $op "$img"
+
+    i=$((i + 1))
+    case $#:$i in
+        1:*  ) : ;;
+        *:$# ) echo ;;
+        *:*  ) echo ; echo "$sep" ; echo ;;
+    esac
+done
