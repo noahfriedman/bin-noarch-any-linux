@@ -1,5 +1,5 @@
 #!/bin/sh
-# $Id: ratelimit-web-download,v 1.1 2015/07/21 00:53:54 friedman Exp $
+# $Id: ratelimit-web-download,v 1.2 2015/07/21 22:25:17 friedman Exp $
 
 xtc() { (set -x; tc "$@"); }
 
@@ -19,7 +19,7 @@ config()
 
     xtc qdisc add dev $iface handle ffff: ingress
 
-    for port in 80 443; do
+    for port in 22 80 443; do
         xtc filter \
             add dev $iface parent ffff: protocol ip prio 50 \
             u32 match ip sport $port 0xffff \
