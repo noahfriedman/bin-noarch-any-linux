@@ -1,0 +1,10 @@
+#!/bin/sh
+# $Id$
+
+# "zfs mount" passes "-o zfsutil" to mount.zfs, but it will refuse to mount
+# volumes which have mountpoint=none or canmount=off.
+# We can bypass the zfs front end in emergency cases.
+
+exec mount.zfs -t zfs -o zfsutil "$@"
+
+# eof
