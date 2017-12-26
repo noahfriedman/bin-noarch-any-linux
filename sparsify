@@ -1,0 +1,16 @@
+#!/bin/sh
+# $Id$
+
+v=--verbose
+case $1 in
+    -v ) v=--verbose; shift ;;
+    -q ) v=; shift ;;
+esac
+
+for file in "$@"; do
+    tm=`stat -c "%y" "$file"`
+    fallocate --dig-holes $v "$file"
+    touch -d "$tm" "$file"
+done
+
+# eof
