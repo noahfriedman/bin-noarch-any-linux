@@ -4,7 +4,7 @@
 # Created: 2017-04-18
 # Public domain.
 
-# $Id$
+# $Id: mencfs,v 1.1 2017/04/18 10:39:17 friedman Exp $
 
 # Commentary:
 
@@ -46,7 +46,8 @@ main()
             exit 1 ;;
     esac
 
-    dstdir=`fqpath "${1%.enc}"`
+    dstdir=${1%/}  # strip trailing /
+    dstdir=`fqpath "${dstdir%.enc}"`
     srcdir=$dstdir.enc
     shift
 
