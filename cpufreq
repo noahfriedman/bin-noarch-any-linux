@@ -1,5 +1,5 @@
 #!/bin/sh
-# $Id: cpufreq,v 1.4 2010/02/17 18:44:54 friedman Exp $
+# $Id: cpufreq,v 1.5 2014/11/22 21:38:01 friedman Exp $
 
 # Display current frequency values, or set new thresholds
 
@@ -13,7 +13,6 @@ initialize()
 
   read scaling_min_freq  < $sys/cpu0/cpufreq/scaling_min_freq
   read scaling_max_freq  < $sys/cpu0/cpufreq/scaling_max_freq
-  read scaling_cur_freq  < $sys/cpu0/cpufreq/scaling_cur_freq
 
   read scaling_available_frequencies < $sys/cpu0/cpufreq/scaling_available_frequencies
 
@@ -22,21 +21,60 @@ initialize()
   read scaling_driver                < $sys/cpu0/cpufreq/scaling_driver
 }
 
+display_cur_freq()
+{
+    local kind=${1-scaling}
+    local i=0
+    local f=0
+    local sum=0
+    while :; do
+        local cpufreq=$sys/cpu$i/cpufreq
+        test -d $cpufreq || break
+        test -r  $cpufreq/${kind}_cur_freq || return 1
+        read f < $cpufreq/${kind}_cur_freq
+        echo "${kind}_cur_freq[$i]=$f"
+        sum=$((sum + f))
+        i=$((i + 1))
+    done
+    eval ${kind}_avg_freq=$((sum / i))
+    return 0
+}
+
+display_cpuinfo_avg_freq()
+{
+    case $cpuinfo_avg_freq in
+        '' ) display_cur_freq cpuinfo > /dev/null ;;
+    esac
+    case $cpuinfo_avg_freq in '' ) return ;; esac
+    echo cpuinfo_avg_freq=$cpuinfo_avg_freq
+}
+
+display_scaling_avg_freq()
+{
+    case $scaling_avg_freq in
+        '' ) display_cur_freq scaling > /dev/null ;;
+    esac
+    case $scaling_avg_freq in '' ) return ;; esac
+    echo scaling_avg_freq=$scaling_avg_freq
+}
+
 display_all()
 {
   echo cpuinfo_min_freq=$cpuinfo_min_freq
   echo cpuinfo_max_freq=$cpuinfo_max_freq
+  display_cur_freq cpuinfo
+  display_cpuinfo_avg_freq
+
   echo
   echo scaling_min_freq=$scaling_min_freq
   echo scaling_max_freq=$scaling_max_freq
-  echo scaling_cur_freq=$scaling_cur_freq
+  display_cur_freq scaling
+  display_scaling_avg_freq
 
   case $scaling_available_frequencies in
       '' ) : ;;
-      * )
-          echo
-          echo scaling_available=$scaling_available_frequencies
-          ;;
+      * ) echo
+          echo scaling_available=$scaling_available_frequencies ;;
   esac
   echo
   echo governor_avail=$scaling_available_governors
@@ -125,7 +163,10 @@ main()
     a:*  | all:* ) display_all ;;
 
     avail*:*     ) echo $scaling_available_frequencies ;;
-    :            ) echo $scaling_cur_freq ;;
+
+    :            ) display_cpuinfo_avg_freq
+                   display_scaling_avg_freq
+                   : ;;
 
     min:*        ) min $2 ;;
     max:*        ) max $2 ;;
