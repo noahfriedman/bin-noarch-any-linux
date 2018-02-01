@@ -1,5 +1,5 @@
 #!/bin/sh
-# $Id: cpufreq,v 1.5 2014/11/22 21:38:01 friedman Exp $
+# $Id: cpufreq,v 1.6 2018/01/26 08:45:33 friedman Exp $
 
 # Display current frequency values, or set new thresholds
 
@@ -36,6 +36,7 @@ display_cur_freq()
         sum=$((sum + f))
         i=$((i + 1))
     done
+    test $i -eq 0 && return 1
     eval ${kind}_avg_freq=$((sum / i))
     return 0
 }
