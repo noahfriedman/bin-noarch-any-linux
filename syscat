@@ -1,48 +1,104 @@
-#!/bin/bash
+#!/usr/bin/perl
 # syscat --- display the values of pseudofiles under /sys
 # Author: Noah Friedman <friedman@splode.com>
 # Created: 2017-10-06
 # Public domain
 
-# $Id$
+# $Id: syscat,v 1.1 2017/10/07 00:17:39 friedman Exp $
 
-apush() { eval "$1=(\"\${$1[@]}\" \"\${@:2}\")"; }
+use strict;
+use warnings qw(all);
 
-main()
+use FindBin;
+use lib "$FindBin::Bin/../../../lib/perl";
+use lib "$ENV{HOME}/lib/perl";
+
+use Getopt::Long;
+use Pod::Usage;
+
+use NF::FileUtil qw(:all);
+
+my %opt = ( bin => 0,
+            rec => 0,
+          );
+
+my %tbl;
+my $maxlen = 0;
+
+sub parse_options
 {
-    unset LANG ${!LC*}
-    export LC_ALL=C
+  my $help = -1;
+  local *ARGV = \@{$_[0]}; # modify our local arglist, not real ARGV.
 
-    shopt -s dotglob
+  my $parser = Getopt::Long::Parser->new;
+  $parser->configure (qw(bundling autoabbrev no_ignore_case));
+  my $succ = $parser->getoptions
+    ( "h|?|help+"        => \$help,
 
-    rec='-maxdepth 0' bin=-I
-    while :; do
-        case $1 in
-            -r        ) shift; rec=          ;;
-            -b        ) shift; bin=-a        ;;
-            -rb | -br ) shift; bin=-a rec= ;;
-            *         ) break ;;
-        esac
-    done
+      "a|text!"          => \$opt{bin},  # like grep switch
+      "r|recursive!"     => \$opt{rec},
+    );
 
-    declare -a parm
-    case $#:$rec in
-        0:  ) parm=(*) ;;
-        0:* ) for arg in *; do
-                  test  -f "$arg" && apush parm "$arg"
-              done ;;
-        *:* ) parm=("$@") ;;
-    esac
-
-    find "${parm[@]}" $rec -type f -print0 2>/dev/null \
-        | sort -z \
-        | xargs -0 --no-run-if-empty egrep -H $bin '^.?' 2>/dev/null \
-        | { if type fmtcols > /dev/null 2>&1
-            then fmtcols -s : -S ' : ' -n2
-            else column  -s : -o ' : ' -t
-            fi; }
+  pod2usage (-exitstatus => 1, -verbose => 0)     unless $succ;
+  pod2usage (-exitstatus => 0, -verbose => $help) if $help >= 0;
 }
 
-main "$@"
+sub contents
+{
+  my ($filename) = @_;
+
+  return unless -f $filename;
+  return unless -r _;     # _ reuses last stat call
+  my $size    = -s _;
+  return if $size > 4096; # skip entries that may be memory mappings
+
+  # we don't care about unreadable files or other permission problems
+  open (my $fh, $filename) or return;
+  # Avoid hanging on files that never return data
+  set_blocking_mode (0, $fh);
+
+  local $_;
+  my $offset = sysread ($fh, $_, 4096);
+  return unless defined $offset; # assume EAGAIN
+
+  my $total = $offset;
+  my $max   = 2^20; # 1MiB
+  while ($total < $max)
+    {
+      my $rsz = sysread ($fh, $_, $max - $total, $total);
+      last if !defined $rsz || $rsz <= 0;
+      $total += $rsz;
+    }
+
+  # 0x09=TAB, 0x10=LFD, 0x13=RET
+  return if !$opt{bin} && /[\x00-\x08\x11-\x12\x14-\x1f\x7f-\xff]/;
+
+  $tbl{$filename} = $_;
+  my $l = length $filename;
+  $maxlen = $l if $l > $maxlen;
+}
+
+sub main
+{
+  parse_options (\@_);
+
+  push @_, directory_files (".") unless @_;
+  if ($opt{rec})
+    {
+      map { grind_over_tree ($_, \&contents) } @_;
+    }
+  else
+    {
+      map { contents ($_) } @_;
+    }
+
+  my $fmt = sprintf ("%%-%ds : %%s\n", $maxlen);
+  map { my $file = $_;
+        map { printf $fmt, $file, $_;
+            } split (/\n+/, $tbl{$file});
+      } sort keys %tbl;
+}
+
+main (@ARGV);
 
 # eof
