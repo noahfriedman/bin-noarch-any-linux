@@ -1,5 +1,5 @@
 #!/bin/sh
-# $Id: openvpn-ctl,v 1.4 2014/09/09 19:45:00 friedman Exp $
+# $Id: openvpn-ctl,v 1.5 2015/10/08 15:09:10 friedman Exp $
 
 usage()
 {
@@ -24,7 +24,7 @@ sctl()
     target=$2
 
     file=/var/run/.check-openvpn
-    name=${target#openvpn@}
+    name=${target#$svcname@}
     name=${name%.service}
 
     case $action:$target in
@@ -51,7 +51,7 @@ mode_default()
         for svc in $targdir/*; do
             svc=${svc#$targdir/}
             case $svc in
-                openvpn@*.service )
+                $svcname@*.service )
                     system_targets=t
                     sctl $action $svc ;;
             esac
@@ -67,17 +67,22 @@ mode_default()
 get_splode_target()
 {
     if egrep -q '0000(00|7F):2EA4' /proc/net/tcp ; then
-        target=openvpn@splode-proxy.service
+        target=$svcname@splode-proxy.service
     else
-        target=openvpn@splode.service
+        target=$svcname@splode.service
     fi
 }
 
 main()
 {
+    svcname=openvpn
+    if [ -f /lib/systemd/system/openvpn-client@.service ]; then
+        svcname=openvpn-client
+    fi
+
     case $# in
         1 ) mode=default action=$1 ;;
-        2 ) mode=target  action=$1 target=openvpn@$2.service ;;
+        2 ) mode=target  action=$1 target=$svcname@$2.service ;;
         * ) usage ;;
     esac
 
