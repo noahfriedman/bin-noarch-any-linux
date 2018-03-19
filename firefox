@@ -1,15 +1,21 @@
 #!/bin/sh
-# $Id: firefox,v 1.10 2017/07/07 03:14:09 friedman Exp $
+# $Id: firefox,v 1.11 2017/09/01 01:48:57 friedman Exp $
 
 prog=`run-next -p "$0"`
 ffox() { exec run-misc.sh "$prog" "$@"; }
 
-case $* in *-ProfileManager* ) ffox "$@" ;; esac
+case $* in *-ProfileManager* ) ffox -no-remote "$@" ;; esac
+
+version=`ffox --version | sed -e 's/.* \([0-9][0-9]*\)\..*/\1/'`
+if [ $version -ge 57 ];
+then profile=ffoxq
+else profile=firefox
+fi
 
 numscreens=`xdpyinfo | sed -n -e '/^number of screens: */s///p'`
 case $numscreens$DISPLAY in
-    2:*.0 ) ffox -P firefox     "$@" ;;
-    2:*.1 ) ffox -P firefox.2nd "$@" ;;
+    2:*.0 ) ffox -P $profile     "$@" ;;
+    2:*.1 ) ffox -P $profile.2nd "$@" ;;
     * ) ffox "$@" ;;
 esac
 
