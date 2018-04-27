@@ -4,7 +4,7 @@
 # Created: 2009-07-27
 # Public domain
 
-# $Id$
+# $Id: kernel-extract-config,v 1.1 2009/07/27 23:29:36 friedman Exp $
 
 # Commentary:
 
@@ -56,8 +56,14 @@ sub xread
 
 sub gzstart
 {
-  my @gzhdr = (join ("", map { chr(hex) } qw(0x1f 0x8b 0x08 0x00)),
-               join ("", map { chr(hex) } qw(0x1f 0x8b 0x08 0x08)));
+  my @gzhdr = map { join ("", map { chr(hex($_)) } @$_) }
+    ([qw(0x1f 0x8b 0x08 0x00)],            # gz
+     [qw(0x1f 0x8b 0x08 0x08)],            # gz
+     [qw(0xfd 0x37 0x7a 0x58 0x5a 0x00)],  # xz
+     [qw(0x42 0x5a 0x68)],                 # bz2
+     [qw(0x5d 0x00 0x00 0x00)],            # lzma
+     [qw(0x89 0x4c 0x5a)],                 # lzop
+     [qw(0x02 0x21 0x4c 0x18)]);           # lz4
 
   for my $s (@gzhdr)
     {
