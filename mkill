@@ -4,7 +4,7 @@
 # Created: 2008-01-10
 # Public domain
 
-# $Id: mkill,v 1.8 2014/10/11 00:07:53 friedman Exp $
+# $Id: mkill,v 1.9 2014/10/11 00:09:12 friedman Exp $
 
 # Commentary:
 # Code:
@@ -136,8 +136,8 @@ sub main
       my @pid = pidof ($procname);
       unless (@pid)
         {
-          #print STDERR "$progname: $procname: Cannot find matching process\n";
-          #$exitstat = 1;
+          # If signal is 0, we're checking for process existence.
+          $exitstat = 1 if $signal == 0;
           next;
         }
 
