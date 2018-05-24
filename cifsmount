@@ -1,77 +1,116 @@
 #!/bin/bash
-# $Id: cifsmount,v 1.5 2011/10/05 20:40:02 friedman Exp $
+# $Id: cifsmount,v 1.6 2014/01/27 22:39:14 friedman Exp $
 
-for cifs_var in ${!CIFSMOUNT_*}; do
-  var=`echo ${cifs_var#CIFSMOUNT_} | tr '[A-Z]' '[a-z]'`
-  eval smb_$var="'${!cifs_var}'"
-  unset $cifs_var
-done
+apush() { eval "$1=(\"\${$1[@]}\" \"\${@:2}\")"; }
 
-user=${smb_user-${SUDO_USER-${LOGNAME-${USER-`id -u`}}}}
+join()
+{
+    local sep=$1
+    local res=$2
+    shift 2
+    while [ $# -gt 0 ]; do
+        res=$res${sep}$1
+        shift
+    done
+    echo "$res"
+}
 
-smb_username=${smb_username-$user}
-smb_workgroup=${smb_workgroup-WORKGROUP}
+mkoptstr()
+{
+    declare -a optelt
+    for key in "${!cifs_opts[@]}"; do
+        case ${cifs_opts[$key]} in
+            '' ) apush optelt "$key" ;;
+            *  ) apush optelt "$key=${cifs_opts[$key]}" ;;
+        esac
+    done
+    join "," "${optelt[@]}"
+}
 
-smb_sec=${smb_sec-ntlm}
-smb_uid=${smb_uid-$user}
-smb_gid=${smb_gid-`id -g`}
-smb_file_mode=0777
-smb_dir_mode=0777
-#smb_iocharset=${smb_iocharset-'iso-8859-1'}
-#smb_sockopt=${smb_sockopt-'IPTOS_LOWDELAY TCP_NODELAY SO_SNDBUF=65535 SO_RCVBUF=65535'}
+env_opts()
+{
+    cifs_opts=( [workgroup]=WORKGROUP
+                 [username]=${SUDO_USER-${LOGNAME-${USER-`id -un`}}}
+                      [uid]=${UID-`id -u`}
+                      [gid]=`id -g`
+                 [dir_mode]=0777
+                [file_mode]=0777
+                     [vers]=1.0
+                      [sec]=ntlm )
 
-case `id -u` in
-  0 ) umask 022 ;;
-  * ) export ${!smb_*}
-      exec sudo "$0" ${1+"$@"} ;;
-esac
+    for var in ${!CIFSMOUNT_*}; do
+        optname=${var#CIFSMOUNT_}  # strip prefix
+        optname=${optname,,}       # convert to lowercase
+        cifs_opts[$optname]=${!var}
+        unset $var
+    done
+    mkoptstr
+}
 
-export -n ${!smb_*}
-unset smb_umask # special case
+parse_shares()
+{
+    sharemap=()
+    for name in "$@"; do
+        case $name in
+            *\\* ) name=${name//\\//} ;; # convert all \ to /
+        esac
+        case $name in
+            *:/* ) name=//${name%:*}${name#*:} ;;
+        esac
 
-unset cmd_options
-while : ; do
-  case $1 in
-    -o )
-         cmd_options="$cmd_options $2"
-         shift
-         shift ;;
-     * ) break ;;
-  esac
-done
+        case $name in
+            //* )
+                share=$name
+                mntpt=/s/${name#//}
+                sharemap[$share]=$mntpt ;;
 
-# Parse options on the command line and eval them to override the defaults
-# computed above.
-case ${cmd_options+defined} in
-  defined )
-    eval `echo $cmd_options \
-           | sed -e 's/[ 	,][ 	,]*/ /g' \
-                 -e 's/\([^ =]*\)=\([^ ]*\)/smb_\1="\2"/g'` ;;
-esac
+            /s/* )
+                share=//${name#/s/}
+                mntpt=$name
+                sharemap[$share]=$mntpt ;;
+        esac
+    done
+}
 
-options=
-for var in ${!smb_*}; do
-  opt=${var#smb_}
-  options=$options,$opt=${!var}
-done
-options=${options#,}
+do_mounts()
+{
+    for share in "${!sharemap[@]}"; do
+        mntpt=${sharemap[$share]}
+        test -d "$mntpt" || mkdir -p "$mntpt"
+        mount.cifs "$share" "$mntpt" -o "$cifs_optstr" || exitstat=$?
+    done
+    find /s -xdev -type d -print0 | sort -rz | xargs -0 rmdir 2> /dev/null
+}
 
-exitstat=0
-for share in ${1+"$@"}; do
-  case $share in
-    /s/* ) share=`echo "$share" | sed -e 's=^/s/=//='`  ;;
-    *\\* ) share=`echo "$share" | sed -e 's=\\\\=/=g'` ;;
-    *:/* ) share=//`echo "$share" | sed -e "s/://"`    ;;
-  esac
+main()
+{
+    declare -A cifs_opts sharemap
 
-  mntpoint=`echo "$share" | sed -e 's=^//=/s/='`
-  test -d "$mntpoint" || mkdir -p "$mntpoint"
+    case ${cifs_optstr-notset} in
+        notset )
+            cifs_optstr=`env_opts`
+            while [ $# -gt 0 ]; do
+                case $1 in
+                    -o ) cifs_optstr=$cifs_optstr,$2
+                         shift 2 ;;
+                    * ) break
+                esac
+            done ;;
+    esac
 
-  mount.cifs "$share" "$mntpoint" -o "$options" || exitstat=$?
-done
+    case ${EUID-`id -u`} in
+        0 ) umask 022 ;;
 
-find /s -xdev -type d -print0 | sort -rz | xargs -0 rmdir 2> /dev/null
+        * ) export cifs_optstr
+            exec sudo "$0" "$@" ;;
+    esac
 
-exit $exitstat
+    exitstat=0
+    parse_shares "$@"
+    do_mounts
+    exit $exitstat
+}
+
+main "$@"
 
 # eof
