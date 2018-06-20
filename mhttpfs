@@ -1,0 +1,47 @@
+#!/bin/bash
+# $Id$
+
+apush() { eval "$1=(\"\${$1[@]}\" \"\${@:2}\")"; }
+
+opts=( --config /dev/null
+
+       --allow-other
+       --allow-non-empty
+       --daemon
+
+       --attr-timeout=5s
+       --dir-cache-time=5m
+
+       #--default-permissions
+       --uid=0
+       --gid=0
+       --umask=0
+       --read-only
+
+       #--no-checksum
+       #--no-modtime
+       #--no-seek
+)
+
+while [ $# -gt 0 ]; do
+    case $1 in
+        *://* )
+            proto=${1%%://*}
+            rhost=${1#*://}
+            rhost=${rhost%%/*}
+            path=${1#*://$rhost}
+
+            vhost=${rhost//./_}
+            uvar=RCLONE_CONFIG_${vhost^^}_URL
+            tvar=RCLONE_CONFIG_${vhost^^}_TYPE
+            export "$uvar=$proto://$rhost" "$tvar=http"
+
+            apush opts "$vhost:$path"
+            shift
+            break ;;
+    esac
+done
+
+exec rclone mount "${opts[@]}" "$@"
+
+# eof
