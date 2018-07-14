@@ -1,5 +1,5 @@
 #!/bin/bash
-# $Id$
+# $Id: mhttpfs,v 1.1 2018/06/20 19:18:56 friedman Exp $
 
 apush() { eval "$1=(\"\${$1[@]}\" \"\${@:2}\")"; }
 
@@ -31,7 +31,7 @@ while [ $# -gt 0 ]; do
             rhost=${rhost%%/*}
             path=${1#*://$rhost}
 
-            vhost=${rhost//./_}
+            vhost=${rhost//[-.]/_}
             uvar=RCLONE_CONFIG_${vhost^^}_URL
             tvar=RCLONE_CONFIG_${vhost^^}_TYPE
             export "$uvar=$proto://$rhost" "$tvar=http"
