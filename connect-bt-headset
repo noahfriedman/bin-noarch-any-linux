@@ -1,5 +1,5 @@
 #!/usr/bin/env perl
-# $Id: connect-bt-headset,v 1.8 2015/11/19 21:07:33 friedman Exp $
+# $Id: connect-bt-headset,v 1.9 2015/11/20 22:12:59 friedman Exp $
 
 # Connect my headset using the bloody fucking bluez5 crapware.
 
@@ -55,6 +55,9 @@ sub bt_connect
 
   $e->expect (10,
               [ qr/\[${cb}NEW$ce\] Controller.*#/s
+                => sub { $e->send ("power on") }
+              ],
+              [ qr/Agent registered/
                 => sub { $e->send ("power on") }
               ],
               [ qr/Changing power on succeeded/
