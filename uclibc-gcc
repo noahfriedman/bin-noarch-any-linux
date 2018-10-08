@@ -1,0 +1,56 @@
+#!/bin/bash -x
+
+apush() { eval "$1=(\"\${$1[@]}\" \"\${@:2}\")"; }
+
+case $0 in
+  */ucgcc ) cc=${GCC-/usr/bin/gcc} ;;
+  */ucg++ ) cc=${GCXX-/usr/bin/g++} ;;
+esac
+
+incdir=/usr/include/uClibc
+libdir=/usr/lib64/uClibc
+
+declare -a inc=(
+    -nostdinc
+    -I$incdir
+    -I/usr/lib/gcc/x86_64-redhat-linux/3.4.6/include
+)
+
+declare -a crt=(
+    -nostartfiles
+    -nodefaultlibs
+    -nostdlib
+
+    $libdir/crt1.o
+    $libdir/crti.o
+
+    -L$libdir
+)
+
+declare -a lib=(
+    $libdir/libm.a
+    $libdir/libc.a
+    $libdir/crtn.o
+)
+
+declare -a ccargs=()
+while [ $# -gt 0 ]; do
+    apush ccargs "$1"
+
+    elt=$1
+    shift
+
+    case $elt in
+        --version ) inc=() crt=() lib=() ;;
+        -[cSE] )           crt=() lib=() ;;
+        -o     )
+            case $1 in
+                *.l[ao] )  crt=() lib=() ;;
+            esac
+    esac
+done
+
+
+exec $cc "${inc[@]}" "${crt[@]}" "${ccargs[@]}" "${lib[@]}"
+
+# eof
