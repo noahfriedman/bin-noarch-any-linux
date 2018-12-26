@@ -1,5 +1,5 @@
 #!/usr/bin/env perl
-# $Id: mps,v 1.9 2015/12/15 01:19:51 friedman Exp $
+# $Id: mps,v 1.10 2017/05/04 23:48:39 friedman Exp $
 
 $^W = 1; # enable warnings
 
@@ -25,12 +25,13 @@ my @field =             # 1 = right-justify
     [qw( vsz              1 )],
     [qw( rss              1 )],
     [qw( tty=TTY          0 )],
+    [qw( wchan:32         0 )],
     [qw( stat=ST          0 )],
     [qw( cpuid=P          1 )],
     [qw( stime            1 )],
     [qw( bsdtime          1 )],
     [qw( context          0 )],
-    [qw( comm=LWPNAME     0 )],  # for "mps Hx"
+    [qw( comm:32=LWPNAME  0 )],  # for "mps Hx"
     [qw( args             0 )],
   );
 
@@ -52,7 +53,7 @@ sub delete_field
       for (my $i = 0; $i < @field; $i++)
         {
           if (lc $field[$i]->[0] eq lc $f
-              || $field[$i]->[0] =~ /^$f=/i)
+              || $field[$i]->[0] =~ /^$f[:=]/i)
             {
               splice (@field, $i, 1);
               last;
@@ -78,13 +79,20 @@ sub fixup_lwpname
       } @$lines;
 }
 
+sub match_any
+{
+  my $re = shift;
+  map { return 1 if $_ =~ $re } @_;
+  return 0;
+}
+
 sub main
 {
   delete_field ('context')
     unless $ENV{MPS_CONTEXT} && -d "/sys/fs/selinux/booleans";
 
-  my $show_lwpname = (@_ && $_[0] =~ /^[^-]*H/);
-  delete_field ('comm', 'lwp') unless $show_lwpname;
+  my $show_lwpname = match_any (qr/^[^-]*H/, @_);
+  delete_field ('comm', 'lwp', 'wchan') unless $show_lwpname;
 
   $ENV{PS_FORMAT} = join (",", field_names());
   $ENV{PS_PERSONALITY} = 'linux';
