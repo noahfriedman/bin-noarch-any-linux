@@ -1,0 +1,3 @@
+#!/bin/sh
+
+run-next "$0" -o "$@" | sed -e 's/ *\\  */ /g'
