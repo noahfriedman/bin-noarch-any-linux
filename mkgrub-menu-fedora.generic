@@ -1,5 +1,5 @@
 #!/usr/bin/env perl
-# $Id: mkgrub-menu-fedora.generic,v 1.5 2015/01/17 00:48:04 friedman Exp $
+# $Id: mkgrub-menu-fedora.generic,v 1.6 2016/07/27 22:46:33 friedman Exp $
 
 use strict;
 use warnings qw(all);
@@ -21,7 +21,7 @@ my $tmpl_root = "/dev/${tmpl_host}_vg0/f%3\$d%4\$s_root";
 my $template = "
 	menuentry '%1\$s' {
 	    save_default
-	    set root='$tmpl_part'
+	    if [ -z \"\$root\" ]; then set root='$tmpl_part'; fi
 	    linux    /vmlinuz-%2\$s root=$tmpl_root ro %5\$s
 	    initrd /initramfs-%6\$s.img
 	}\n";
