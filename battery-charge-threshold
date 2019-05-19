@@ -1,0 +1,72 @@
+#!/bin/sh
+# $Id$
+
+bat_devs()
+{
+    for bat in /sys/class/power_supply/BAT* ; do
+        echo ${bat##*/}
+    done
+}
+
+read_thresh()
+{
+    local bat=/sys/class/power_supply/$1
+    read start_thresh < $bat/charge_start_threshold || exit $?
+    read stop_thresh  < $bat/charge_stop_threshold  || exit $?
+}
+
+write_thresh()
+{
+    local bat=/sys/class/power_supply/$1
+
+    case $start_thresh in
+        '' | - ) : ;;
+        * ) echo -n $start_thresh > $bat/charge_start_threshold ;;
+    esac
+
+    case $stop_thresh in
+        '' | - ) : ;;
+        * ) echo -n $stop_thresh  > $bat/charge_stop_threshold ;;
+    esac
+}
+
+print_thresh()
+{
+    for bat in "$@"; do
+        read_thresh $bat
+        printf "%s: %02d %02d\n" $bat $start_thresh $stop_thresh
+    done
+}
+
+main()
+{
+    case $# in
+        0 ) print_thresh `bat_devs`
+            return $? ;;
+        1 ) case $1 in
+                [0-9]* ) usage ;;
+                *      ) print_thresh $1
+                         return $? ;;
+            esac ;;
+    esac
+
+    case $1:$2 in
+        : | :- | -: | -:- | [0-9]*: | [0-9]*:- | :[0-9]* | -:[0-9]* | [0-9]*:[0-9]* )
+            start_thresh=$1 stop_thresh=$2
+            shift 2
+            case $# in
+                0 ) set : `bat_devs`
+                    shift
+                    for bat in "$@"; do
+                        write_thresh $bat
+                    done
+            esac
+            return $?
+    esac
+
+    print_thresh "$@"
+}
+
+main "$@"
+
+# eof
