@@ -1,0 +1,26 @@
+#!/bin/sh
+# $Id$
+
+domain=${HOSTNAME-`uname -n`}
+domain=${domain%.*}
+domain=${domain##*.}
+
+dbx=$domain.kdbx
+key=$domain.key
+
+dbdir=${XDG_CONFIG_HOME-$HOME/.config}/keepassxc
+cd "$dbdir" || exit $?
+
+cmd=$1
+shift
+set /usr/bin/keepassxc-cli "$cmd" --no-password --key-file "$key" "$dbx" "$@"
+
+tty_state=`stty -g 2>/dev/null`
+case $tty_state in
+    '' ) exec "$@" ;;
+esac
+
+trap 'stty "$tty_state"' 0 1 2 3 15
+"$@"
+
+# eof
