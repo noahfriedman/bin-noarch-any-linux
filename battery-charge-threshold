@@ -1,5 +1,5 @@
 #!/bin/sh
-# $Id$
+# $Id: battery-charge-threshold,v 1.1 2019/05/19 06:06:57 friedman Exp $
 
 bat_devs()
 {
@@ -11,30 +11,36 @@ bat_devs()
 read_thresh()
 {
     local bat=/sys/class/power_supply/$1
-    read start_thresh < $bat/charge_start_threshold || exit $?
-    read stop_thresh  < $bat/charge_stop_threshold  || exit $?
+    read cur_start < $bat/charge_start_threshold || exit $?
+    read cur_stop  < $bat/charge_stop_threshold  || exit $?
 }
 
 write_thresh()
 {
     local bat=/sys/class/power_supply/$1
+    read_thresh $1
 
-    case $start_thresh in
-        '' | - ) : ;;
-        * ) echo -n $start_thresh > $bat/charge_start_threshold ;;
-    esac
+    case $new_start in '' | - ) new_start=$cur_start ;; esac
+    case $new_stop  in '' | - ) new_stop=$cur_stop   ;; esac
 
-    case $stop_thresh in
-        '' | - ) : ;;
-        * ) echo -n $stop_thresh  > $bat/charge_stop_threshold ;;
-    esac
+    if [ $new_start -gt $new_stop ]; then
+        eval new_start=$new_stop new_stop=$new_start
+    fi
+
+    if [ $new_start -gt $cur_stop ]; then
+        echo -n $new_stop  > $bat/charge_stop_threshold
+        echo -n $new_start > $bat/charge_start_threshold
+    else
+        echo -n $new_start > $bat/charge_start_threshold
+        echo -n $new_stop  > $bat/charge_stop_threshold
+    fi
 }
 
 print_thresh()
 {
     for bat in "$@"; do
         read_thresh $bat
-        printf "%s: %02d %02d\n" $bat $start_thresh $stop_thresh
+        printf "%s: %02d %02d\n" $bat $cur_start $cur_stop
     done
 }
 
@@ -51,16 +57,18 @@ main()
     esac
 
     case $1:$2 in
-        : | :- | -: | -:- | [0-9]*: | [0-9]*:- | :[0-9]* | -:[0-9]* | [0-9]*:[0-9]* )
-            start_thresh=$1 stop_thresh=$2
+        [0-9]*: | [0-9]*:- | :[0-9]* | -:[0-9]* | [0-9]*:[0-9]* )
+            new_start=$1 new_stop=$2
             shift 2
+
             case $# in
                 0 ) set : `bat_devs`
-                    shift
-                    for bat in "$@"; do
-                        write_thresh $bat
-                    done
+                    shift ;;
             esac
+
+            for bat in "$@"; do
+                write_thresh $bat
+            done
             return $?
     esac
 
