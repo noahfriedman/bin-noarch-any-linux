@@ -1,9 +1,10 @@
 #!/bin/sh
-# $Id: battery-charge-threshold,v 1.1 2019/05/19 06:06:57 friedman Exp $
+# $Id: battery-charge-threshold,v 1.2 2019/06/14 19:37:06 friedman Exp $
 
 bat_devs()
 {
     for bat in /sys/class/power_supply/BAT* ; do
+        test -d $bat || continue
         echo ${bat##*/}
     done
 }
@@ -11,13 +12,23 @@ bat_devs()
 read_thresh()
 {
     local bat=/sys/class/power_supply/$1
-    read cur_start < $bat/charge_start_threshold || exit $?
-    read cur_stop  < $bat/charge_stop_threshold  || exit $?
+    if ! [ -d $bat ]; then
+        echo "$1: no such device." 1>&2
+        return 1
+    fi
+
+    read cur_start < $bat/charge_start_threshold || return $?
+    read cur_stop  < $bat/charge_stop_threshold  || return $?
 }
 
 write_thresh()
 {
     local bat=/sys/class/power_supply/$1
+    if ! [ -d $bat ]; then
+        echo "$1: no such device." 1>&2
+        return 1
+    fi
+
     read_thresh $1
 
     case $new_start in '' | - ) new_start=$cur_start ;; esac
@@ -28,19 +39,25 @@ write_thresh()
     fi
 
     if [ $new_start -gt $cur_stop ]; then
-        echo -n $new_stop  > $bat/charge_stop_threshold
-        echo -n $new_start > $bat/charge_start_threshold
+        echo -n $new_stop  > $bat/charge_stop_threshold  || return $?
+        echo -n $new_start > $bat/charge_start_threshold || return $?
     else
-        echo -n $new_start > $bat/charge_start_threshold
-        echo -n $new_stop  > $bat/charge_stop_threshold
+        echo -n $new_start > $bat/charge_start_threshold || return $?
+        echo -n $new_stop  > $bat/charge_stop_threshold  || return $?
     fi
 }
 
 print_thresh()
 {
+    case $# in
+        0 ) echo "No batteries present" 1>&2
+            return 1 ;;
+    esac
+
     for bat in "$@"; do
-        read_thresh $bat
-        printf "%s: %02d %02d\n" $bat $cur_start $cur_stop
+        if read_thresh $bat; then
+            printf "%s: %02d %02d\n" $bat $cur_start $cur_stop
+        fi
     done
 }
 
@@ -61,10 +78,8 @@ main()
             new_start=$1 new_stop=$2
             shift 2
 
-            case $# in
-                0 ) set : `bat_devs`
-                    shift ;;
-            esac
+            case $# in 0 ) set : `bat_devs`; shift ;; esac
+            case $# in 0 ) echo "No batteries present." 1>&2; return 1 ;; esac
 
             for bat in "$@"; do
                 write_thresh $bat
