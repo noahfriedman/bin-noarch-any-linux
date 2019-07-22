@@ -1,15 +1,17 @@
 #!/bin/sh
-# $Id$
+# $Id: rpm,v 1.1 2019/03/01 04:00:41 friedman Exp $
 
-for arg in "$@"; do
-    case $arg in
-        --* ) : ;;
-        -*q*l* | -*l*q* )
-            set : --noartifact --noghost "$@"
-            shift
-            break ;;
-    esac
-done
+if [ -d /usr/lib/.build-id ]; then
+    for arg in "$@"; do
+        case $arg in
+            --* ) : ;;
+            -*q*l* | -*l*q* )
+                set : --noartifact --noghost "$@"
+                shift
+                break ;;
+        esac
+    done
+fi
 
 exec run-next "$0" "$@"
 
