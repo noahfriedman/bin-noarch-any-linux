@@ -126,12 +126,12 @@ print_new()
     mprintf "$fmt"   High: $HighTotal  $HighUsed  $HighFree ;;
     esac
 
-    case ${SwapTotal:-0}:$show_total in 
+    case ${SwapTotal:-0}:$show_total in
         *:t )
             mprintf "$fmt"   Swap: $SwapTotal  $SwapUsed  $SwapFree
             mprintf "$fmt"  Total:     $Total $TotalUsed $TotalFree ;;
         0:* ) : ;;
-        * ) 
+        * )
             mprintf "$fmt"   Swap: $SwapTotal  $SwapUsed  $SwapFree ;;
     esac
 }
@@ -158,7 +158,9 @@ fscale()
         while [ ${#nval} -lt $sigfig ]; do
             nval=0$nval
         done
-        int=${nval::-$sigfig}
+        # Bash 4.x doesn't support negative lengths (i.e. count from right)
+        #int=${nval::-$sigfig}
+        int=${nval::$(( ${#nval} - $sigfig))}
         frac=${nval#$int}
         nval=$int.$frac
     fi
@@ -180,8 +182,8 @@ fscale()
         nval=${nval:0:$((sigfig + 1))}
         while :; do
             case $nval in
-                *.*0 ) nval=${nval::-1} ;;
-                *.   ) nval=${nval::-1}; break ; ;;
+                *.*0 ) nval=${nval::$((${#nval}-1))} ;;
+                *.   ) nval=${nval::$((${#nval}-1))}; break ;;
                 *    ) break ;;
             esac
         done
