@@ -12,9 +12,11 @@ options=(--perl-regexp
          --initial-tab
 
          --exclude='*~'
+         --exclude='#*#'
          --exclude='*.elc'
          --exclude='*.[oa]'
          --exclude='*.py[co]'
+         --exclude='.#*'
          --exclude=COPYING
          --exclude=LICENSE
 
