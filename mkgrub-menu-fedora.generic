@@ -11,8 +11,7 @@ my $menu_file  = "/dev/stdout";
 
 my $update_default = 0;
 
-my @options = (qw(threadirqs
-                  sysrq_always_enabled));
+my @options = (qw(sysrq_always_enabled));
 
 my $tmpl_host = hostnick ();
 my $tmpl_part = sprintf ("(hd0,%d)", bootpart ());
@@ -102,7 +101,7 @@ sub main
   if (@_ && $_[0] eq '-') { $fh = *STDOUT{IO} }
   else { open ($fh, "> $menu_file") || die "$menu_file: $!\n" }
 
-  if (-f "/etc/systemd/sleep.conf" || -d "/etc/systemd/sleep.conf.d")
+  if (-d "/etc/systemd/sleep.conf.d")
     {
       my $swapdev = swappart();
       push @options, "resume=$swapdev" if defined $swapdev;
