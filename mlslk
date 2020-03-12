@@ -128,6 +128,7 @@ sub proc_locks
       @elt{qw(n type enforced rw pid dev_maj dev_min dev_ino off_beg off_end)} = @m;
       $elt{type}   = substr ($elt{type}, 0, 1);
       $elt{devstr} = join (",", @elt{qw(dev_maj dev_min)});
+      next unless -f "/proc/$elt{pid}/comm";
       chomp ($elt{procname} = file_contents ("/proc/$elt{pid}/comm"));
 
       find_locked_file (\%elt);
