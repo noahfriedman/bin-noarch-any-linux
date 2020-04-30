@@ -2,7 +2,7 @@
 # $Id$
 
 for m in "$@"; do
-    fusermount -u "$m"
+    fusermount -u "$m" && rmdir "$m" 2> /dev/null
 done
 
 # eof
