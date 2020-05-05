@@ -1,0 +1,18 @@
+#!/bin/sh
+
+cmd=cmdNotFound
+for prog in dnf yum; do
+    if type -p $prog > /dev/null 2>&1; then
+        cmd=$prog
+        break
+    fi
+done
+
+trap 'umount /var/lib/$prog /var/cache/$prog' 0 1 2 3 15
+
+mount -t tmpfs none /var/cache/$prog
+mount -t tmpfs none /var/lib/$prog
+
+$cmd "$@"
+
+# eof
