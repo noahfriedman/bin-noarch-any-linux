@@ -1,19 +1,24 @@
-#!/bin/bash -x
-
-apush() { eval "$1=(\"\${$1[@]}\" \"\${@:2}\")"; }
+#!/bin/bash
 
 case $0 in
-  */ucgcc ) cc=${GCC-/usr/bin/gcc} ;;
-  */ucg++ ) cc=${GCXX-/usr/bin/g++} ;;
+  */uc[gc]++ ) cc=${GCXX-/usr/bin/g++} ;;
+  */ucgcc    ) cc=${GCC-/usr/bin/gcc}  ;;
+  *          ) cc=${GCC-/usr/bin/gcc}  ;;
 esac
 
 incdir=/usr/include/uClibc
 libdir=/usr/lib64/uClibc
+case $* in
+    *-m32* ) libdir=/usr/lib/uClibc ;;
+esac
+
+gcc_incdir=`$cc -print-libgcc-file-name`
+gcc_incdir=${gcc_incdir%/*}/include
 
 declare -a inc=(
     -nostdinc
-    -I$incdir
-    -I/usr/lib/gcc/x86_64-redhat-linux/3.4.6/include
+    -isystem $incdir
+    -I$gcc_incdir
 )
 
 declare -a crt=(
@@ -35,7 +40,7 @@ declare -a lib=(
 
 declare -a ccargs=()
 while [ $# -gt 0 ]; do
-    apush ccargs "$1"
+    ccargs+=( "$1" )
 
     elt=$1
     shift
