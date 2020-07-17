@@ -8,31 +8,35 @@ use lib "$FindBin::Bin/../../../lib/perl";
 use lib "$ENV{HOME}/lib/perl";
 
 use NF::FmtCols;
-use Symbol;
+use POSIX;
 use strict;
 
-my @field =             # 1 = right-justify
-  ( [qw( user             0 )],
-    [qw( pid              1 )],
-    [qw( ppid             1 )],
-    [qw( pgid             1 )],
-    [qw( sid              1 )],
-    [qw( lwp              1 )],
-    [qw( nlwp=#T          1 )],
-    [qw( %cpu             1 )],
-    [qw( %mem             1 )],
-    [qw( ni               1 )],
-    [qw( vsz              1 )],
-    [qw( rss              1 )],
-    [qw( tty=TTY          0 )],
-    [qw( wchan:32         0 )],
-    [qw( stat=ST          0 )],
-    [qw( cpuid=P          1 )],
-    [qw( stime            1 )],
-    [qw( bsdtime          1 )],
-    [qw( context          0 )],
-    [qw( comm:32=LWPNAME  0 )],  # for "mps Hx"
-    [qw( args             0 )],
+# Meaning of columns:
+#    1:  1 = right-justify
+#    2:  h = convert to human-readable units
+#    3:  multiplier (if any) for values before human-scaling
+my @field =
+  ( [qw( user             0   )],
+    [qw( pid              1   )],
+    [qw( ppid             1   )],
+    [qw( pgid             1   )],
+    [qw( sid              1   )],
+    [qw( lwp              1   )],
+    [qw( nlwp=#T          1   )],
+    [qw( %cpu             1   )],
+    [qw( %mem             1   )],
+    [qw( ni               1   )],
+    [qw( vsz              1 h 1024 )], # raw is kib
+    [qw( rss              1 h 1024 )], # raw is kib
+    [qw( tty=TTY          0   )],
+    [qw( wchan:32         0   )],
+    [qw( stat=ST          0   )],
+    [qw( cpuid=P          1   )],
+    [qw( stime            1   )],
+    [qw( bsdtime          1   )],
+    [qw( context          0   )],
+    [qw( comm:32=LWPNAME  0   )],  # for "mps Hx"
+    [qw( args             0   )],
   );
 
 sub field_names
@@ -79,6 +83,58 @@ sub fixup_lwpname
       } @$lines;
 }
 
+sub fixup_hreadable
+{
+  my $fmt = shift;
+
+  for (my $f = 0; $f < @field; $f++)
+    {
+      my $h = $field[$f]->[2];
+      next unless $h && $h eq 'h';
+
+      my $scale = $field[$f]->[3] || 1;
+      map { $_->[$f] = scale_size ($scale * $_->[$f], undef, undef, 1)
+              if $_->[$f] =~ /^\d+$/;
+          } @{$fmt->row_data};
+    }
+  $fmt->recalculate;
+}
+
+sub scale_size
+{
+  my ($size, $roundp, $fp, $minimize) = @_;
+  return "0" unless $size;
+
+  my $fmtsize = 1024; # no SI handling here
+  my @suffix = (qw(B K M G T P E));
+  my %suffix = map { $_ => undef } @suffix;
+  my $idx    = 0;
+
+  while ($size >= $fmtsize)
+    {
+      $size /= $fmtsize;
+      $idx++;
+    }
+
+  if ($size < 10 && !$minimize) # Prefer 4096M to 4G
+    {
+      $size *= $fmtsize;
+      $idx--;
+    }
+
+  $size = POSIX::round( $size ) if $roundp;
+  $size = int( $size ) if $size == int( $size );
+
+  my $unit;
+  if ($idx == 0) { $unit = '' }
+  else { $unit = $suffix[$idx] }
+
+  my $fmtstr = ($size == int( $size )
+                ? "%d%s"
+                : sprintf( "%%.%df%%s", $fp || 2));
+  return sprintf( $fmtstr, $size, $unit );
+}
+
 sub match_any
 {
   my $re = shift;
@@ -113,6 +169,7 @@ sub main
       right_justify           => { field_rjustify() },
     );
   $fmt->read_from_array (\@lines);
+  fixup_hreadable ($fmt);
   $fmt->output;
 }
 
