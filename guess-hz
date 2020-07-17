@@ -63,7 +63,9 @@ sub ticks
   my $timer = 0;
   $timer += sum_row ($1) if /^\s*0:\s*([\d\s]*)/m;               # x86 int0
   $timer += sum_row ($1) if /^\s*LOC:\s*([\d\s]*)/m;             # x86 LOC
-  $timer += sum_row ($1) if /^\s*\d+:\s*([\d\s]*).*gp_timer/m;   # arm gp_timer
+  # Look for at least one non-zero digit, since there may be arch_timers
+  # that have no interrupts.
+  $timer += sum_row ($1) if /^\s*\d+:\s*(\d*[1-9]\d*\s*[\d\s]*).*(?:arch|gp)_timer/m;   # arm
   return $timer;
 }
 
@@ -79,15 +81,15 @@ sub msg
 sub main
 {
   my $interval = 5;
-  my $start = ticks ();
-
   msg ("Counting interrupts for $interval seconds...");
-  sleep ($interval);
-  msg ("done.\n\n");
 
+  my $start = ticks ();
+  sleep ($interval);
   my $end = ticks ();
+
   my $hz = ($end - $start) / $interval;
 
+  msg ("done.\n\n");
   print $hz, " HZ\n";
 }
 
