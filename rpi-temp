@@ -1,0 +1,16 @@
+#!/bin/sh
+# Report GPU and CPU temperature on raspberry pi boards
+
+ctof() { dc -e "? 1.8 * 32 + p"; }
+gpu()  { vcgencmd measure_temp | sed -e 's/[^0-9.\-]//g'; }
+cpu()  { sed -e 's/\(...\)$/.\1/' /sys/class/thermal/thermal_zone0/temp; }
+
+case $1 in
+    -f ) echo -n "CPU" ""; cpu | ctof
+         echo -n "GPU" ""; gpu | ctof ;;
+
+    *  ) echo -n "CPU" ""; cpu
+         echo -n "GPU" ""; gpu ;;
+esac
+
+# eof
