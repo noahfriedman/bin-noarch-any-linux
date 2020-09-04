@@ -20,6 +20,9 @@ procs='
   libsocialweb-core
   mission-control-5
   telepathy-logger
+  xdg-desktop-portal
+  xdg-document-portal
+  xdg-permission-store
 '
 
 extra='
