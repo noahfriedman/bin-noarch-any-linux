@@ -1,25 +1,65 @@
-#!/bin/sh
+#!/usr/bin/perl
 
-: ${KVERSION:=`uname -r`}
-: ${KROOT:=/lib/modules/$KVERSION/build}
+use strict;
+use warnings qw(all);
 
-deftarget=modules
-for arg in "$@"; do
-  case $arg in
-    *=* ) :                  ;;
-    *   ) deftarget= ; break ;;
-  esac
-done
+use POSIX qw(uname);
 
-if [ -f Kconfig ]; then
-  set x `sed -e '/^config \(.*\)/!d' -e 's//CONFIG_\1=m/' Kconfig` "$@"
-  shift
-fi
+my $make      = $ENV{MAKE}     || "make";
+my $kversion  = $ENV{KVERSION} || (uname())[2];
+my $kbuild    = $ENV{KROOT}   || "/lib/modules/$kversion";
+my $deftarget = 'modules';
 
-set x ${MAKE-make} -C $KROOT M=`pwd` $deftarget "$@"
-shift
+sub Kopen
+{
+  my $file = ($_[0] =~ m=^/= ? $_[0] : "$kbuild/$_[0]" );
+  if (open( my $fh, "$file" )) { return $fh }
+  print STDERR "open: $file: $!\n";
+  return;
+}
 
-echo "$@"
-exec "$@"
+sub Kconfig
+{
+  my $fh = Kopen( $_[0] ) or return;
+
+  my %def;
+  while (local $_ = <$fh>)
+    {
+      chomp;
+      if (/^config\s+(.*)/)
+        { $def{"CONFIG_$1"} = 'm' }
+      elsif (/^source\s+"?(.*?)"?\s*$/)
+        { %def = (%def, Kconfig( $1 )) }
+    }
+  return %def;
+}
+
+sub main
+{
+  my $pwd = `pwd`;
+  chomp $pwd;
+
+  my %def = Kconfig( "$pwd/Kconfig" ) if -f "$pwd/Kconfig";
+
+  my @target;
+  for my $arg (@_)
+    {
+      if ($arg =~ /^([^+]+)=(.*)/)
+        { $def{$1} = $2 }
+      elsif ($arg =~ /^CONFIG_/)
+        { $def{$arg} = 'm' }
+      else
+        { push @target, $arg }
+    }
+
+  push @target, $deftarget unless @target;
+
+  #%ENV = (%ENV, %def);
+  my @conf = map { "$_=$def{$_}" } sort keys %def;
+  my @cmd = ($make, "-C", "$kbuild", "M=$pwd", @target, @conf);
+  exec( @cmd );
+}
+
+main( @ARGV );
 
 # eof
