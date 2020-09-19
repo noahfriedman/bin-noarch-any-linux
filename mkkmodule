@@ -1,10 +1,10 @@
 #!/bin/sh
-# $Id: mkkmodule,v 1.2 2006/11/21 00:15:47 friedman Exp $
 
-KVERSION=${KVERSION-`uname -r`}
+: ${KVERSION:=`uname -r`}
+: ${KROOT:=/lib/modules/$KVERSION/build}
 
 deftarget=modules
-for arg in ${1+"$@"}; do
+for arg in "$@"; do
   case $arg in
     *=* ) :                  ;;
     *   ) deftarget= ; break ;;
@@ -12,14 +12,14 @@ for arg in ${1+"$@"}; do
 done
 
 if [ -f Kconfig ]; then
-  set x `sed -e '/^config \(.*\)/!d' -e 's//CONFIG_\1=m/' Kconfig` ${1+"$@"}
+  set x `sed -e '/^config \(.*\)/!d' -e 's//CONFIG_\1=m/' Kconfig` "$@"
   shift
 fi
 
-set x ${MAKE-make} -C /lib/modules/$KVERSION/build M=`pwd` $deftarget ${1+"$@"}
+set x ${MAKE-make} -C $KROOT M=`pwd` $deftarget "$@"
 shift
 
-echo ${1+"$@"}
-exec ${1+"$@"}
+echo "$@"
+exec "$@"
 
 # eof
