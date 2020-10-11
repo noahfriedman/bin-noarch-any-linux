@@ -47,6 +47,12 @@
 #
 # And then bring it up with "ifup simhbr0".
 
+# IP forwarding must be enabled, and probably IP masquerade if you want to
+# talk to anything other than the local host from guests:
+#
+#	sysctl -w net.ipv4.conf.eth0.forwarding=1
+#       iptables -t nat -A POSTROUTING -o eth0 -s 192.168.111.0/24 -j MASQUERADE
+
 # Code:
 
 setup()
@@ -176,6 +182,8 @@ net_setup()
 
     ip link set $veth0 up
     ip link set $veth1 up
+
+    sysctl -w net.ipv4.conf.$bridge.forwarding=1
 }
 
 net_teardown()
