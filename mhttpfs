@@ -34,7 +34,7 @@ while [ $# -gt 0 ]; do
             vhost=${rhost//[-.]/_}
             uvar=RCLONE_CONFIG_${vhost^^}_URL
             tvar=RCLONE_CONFIG_${vhost^^}_TYPE
-            export "$uvar=$proto://$rhost" "$tvar=http"
+            export "$uvar=$proto://$rhost" "$tvar=${proto%s}"
 
             apush opts "$vhost:$path"
             shift
