@@ -7,7 +7,8 @@ use warnings qw(all);
 
 my %pfield = ( enforced => { MANDATORY => 1,
                              MSNFS     => 1,
-                             ADVISORY  => 0, },
+                             ADVISORY  => 0,
+                             ACTIVE    => '-', },
 
                rw       => { RW        => 'rw',
                              READ      => 'r',
@@ -126,11 +127,12 @@ sub proc_locks
                $l[9], );
       my %elt;
       @elt{qw(n type enforced rw pid dev_maj dev_min dev_ino off_beg off_end)} = @m;
-      $elt{type}   = substr ($elt{type}, 0, 1);
+      #$elt{type}   = substr ($elt{type}, 0, 1);
       $elt{devstr} = join (",", @elt{qw(dev_maj dev_min)});
-      next unless -f "/proc/$elt{pid}/comm";
-      chomp ($elt{procname} = file_contents ("/proc/$elt{pid}/comm"));
-
+      if (-f "/proc/$elt{pid}/comm")
+        { chomp ($elt{procname} = file_contents ("/proc/$elt{pid}/comm")) }
+      else
+        { $elt{procname} = '(unknown)' }
       find_locked_file (\%elt);
 
       if ($elt{off_end} eq 'EOF')
@@ -165,7 +167,7 @@ my @cols = (qw(procname PROC),
             qw(pid      PID),
             qw(devstr   DEV),
             qw(dev_ino  INO),
-            qw(type     K),
+            qw(type     TYPE),
             qw(rw       RW),
             qw(enforced M),
             qw(filesize FSIZE),
