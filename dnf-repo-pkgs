@@ -1,0 +1,30 @@
+#!/bin/sh
+
+case $# in
+    0 ) echo ${0##*/}: Specify a repo to list;
+        echo
+        dnf repolist --all | egrep -v -- '-(debuginfo|source|src)'
+        exit 1 ;;
+esac 1>&2
+
+case $1 in
+    *'*'* ) repo= ;;
+    *     ) repo=--repo=$1
+            shift ;;
+esac
+
+dnf_args=(
+    --quiet
+
+    repoquery
+    --queryformat '%{installsize}\t%{name}\t%{version}-%{release}\t%{arch}\t%{buildtime}\t%{reponame}\t%{summary}'
+    --available
+    --latest-limit=1
+    ${repo:+"$repo"}
+)
+
+${DNF-dnf} "${dnf_args[@]}" "$@" |
+    sort -k2,2 -k3,3V -k4,4 |
+    column -t -s'	' -R1
+
+# eof
