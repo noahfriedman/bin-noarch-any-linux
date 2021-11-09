@@ -3,6 +3,8 @@
 
 apush() { eval "$1=(\"\${$1[@]}\" \"\${@:2}\")"; }
 
+obscure() { rclone --config /dev/null obscure "$@"; }
+
 opts=( --config /dev/null
 
        --allow-other
@@ -36,10 +38,25 @@ while [ $# -gt 0 ]; do
             tvar=RCLONE_CONFIG_${vhost^^}_TYPE
             export "$uvar=$proto://$rhost" "$tvar=${proto%s}"
 
+            case $proto in
+                ftp )
+                    : ${RCLONE_FTP_HOST:=$rhost}
+                    : ${RCLONE_FTP_USER:=anonymous}
+                    : ${RCLONE_FTP_PASS:=`obscure anonymous`}
+                    export RCLONE_FTP_{HOST,USER,PASS}
+                    ;;
+            esac
+
+            apush opts --contimeout 300s
             apush opts "$vhost:$path"
-            shift
-            break ;;
+            ;;
+
+        * )
+            apush opts "$1"
+            ;;
     esac
+
+    shift
 done
 
 exec rclone mount "${opts[@]}" "$@"
