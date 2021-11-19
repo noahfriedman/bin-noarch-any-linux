@@ -1,0 +1,78 @@
+#!/usr/bin/env bash
+# mftpfs --- curlftpfs wrapper for command line convenience
+# Author: Noah Friedman <friedman@splode.com>
+# Created: 2021-11-18
+# Public domain.
+
+# Commentary:
+# Code:
+
+curlftpfs_opts=(
+    # Fuse options
+    -o allow_other
+    -o nonempty
+    -o auto_unmount
+    -o subtype=curlftpfs
+
+    -o default_permissions
+    -o uid=0
+    -o gid=0
+    #-o umask=0222 # comment out to use remote file perms
+    -o readdir_ino
+    -o transform_symlinks
+    -o hard_remove
+
+    -o negative_timeout=0
+    -o entry_timeout=30
+    -o attr_timeout=30
+    -o remember=30
+
+    -o no_remote_lock
+    -o no_remote_flock
+    -o no_remote_posix_lock
+
+    #-o debug
+
+    # Ftp options
+    -o connect_timeout=10
+    -o ftp_method=singlecwd # default but slower: multicwd
+    -o ipv4
+    -o transform_symlinks
+    -o user=anonymous:anon@`hostname`
+)
+
+apush() { eval "$1=(\"\${$1[@]}\" \"\${@:2}\")"; }
+
+main()
+{
+    case $# in
+        0 )
+            echo "Usage: ${0##*/} URL [mountPoint] {extra FUSE mount options}" 1>&2
+            exit 1
+            ;;
+
+        1 )
+            url=$1
+            shift
+            mount=${url#*://}
+            mount=${mount%%/*}
+            ;;
+
+
+        * ) url=$1 mount=${2%/}
+            shift; shift
+            ;;
+    esac
+
+    fsname=${url#*://}
+    fsname=${fsname/\//:\/}
+    apush curlftpfs_opts -o fsname=$fsname
+
+    test -d "$mount" || mkdir -p "$mount" || exit $?
+
+    exec curlftpfs "${curlftpfs_opts[@]}" "$@" "$url" "$mount"
+}
+
+main "$@"
+
+# eof
