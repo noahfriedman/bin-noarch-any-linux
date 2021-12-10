@@ -1,21 +1,63 @@
-#!/bin/sh
-# $Id: mstrace,v 1.5 2016/06/08 22:34:16 friedman Exp $
+#!/usr/bin/env bash
 
-case :${HEX+set}:${hex+set}: in
-  *:set:* ) set x -e read=all -e write=all "$@"; shift ;;
-esac
+setup()
+{
+    : ${MSTRACE_EXEC:=exec}
+    :       ${STRACE:=strace}
+    eval `$STRACE -V | sed -ne '1s/^.* \([0-9]*\)\.\([0-9]*\)/vmajor=\1 vminor=\2/p'`
 
-set x ${STRACE-strace}   \
-         -e abbrev=none  \
-         -e signal=all   \
-         -e trace=all    \
-         -e verbose=all  \
-         -s 65535        \
-         -S name         \
-         -f -v -T -y  \
-         "$@"
-shift
+    # Older versions of strace did not have long options,
+    # so use short options, but document long opts as comments
+    strace_opts=(
+        -e  abbrev=none
+        -e  signal=all
+        -e   trace=all
+        -e verbose=all
 
-${MSTRACE_CMD-exec} "$@"
+        -s 65535	# --string-limit
+
+        #-C 		# --summary
+        #-S name	# --summary-sort-by=time|calls|errors|name|none
+
+        #-X verbose	#--const-print-style=raw|abbrev|verbose
+
+        -a 60		# --columns=60  (for column of retur values)
+        -T		# --syscall-times[=precision] default us
+        -f		# --follow-forks
+        -v		# --no-abbrev
+        #-x		# --strings-in-hex=non-ascii|all
+        #-y		# --decode-fds
+        #-yy		# --decode-fds=all
+        #-z		# --successful-only
+        #-Z		# --failed-only
+    )
+
+    if   atleast 4 10; then strace_opts+=( -yy )
+    elif atleast 4  7; then strace_opts+=( -y )
+    fi
+    if   atleast 4  6; then strace_opts+=( -C -S name ); fi
+
+    #if   atleast 5  0 && [ -f /sys/fs/selinux/policy ]; then
+    #    strace_opts+=( --secontext )
+    #fi
+
+    case ${HEX+isset} in
+        isset ) strace_opts+=( -e read=all -e write=all ) ;;
+    esac
+}
+
+atleast()
+{
+    { [ $vmajor -gt $1 ]; } ||
+    { [ $vmajor -eq $1 ] && [ $vminor -gt $2 ]; }
+}
+
+main()
+{
+    setup
+    $MSTRACE_EXEC $STRACE "${strace_opts[@]}" "$@"
+}
+
+main "$@"
 
 # eof
