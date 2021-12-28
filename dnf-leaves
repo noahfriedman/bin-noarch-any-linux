@@ -1,0 +1,7 @@
+#!/bin/sh
+
+dnf leaves |
+    awk '{ print $NF }' |
+    xargs rpm-pkg-list -hs ${1-name}
+
+# eof
