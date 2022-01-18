@@ -4,63 +4,52 @@
 # Created: 2008-01-10
 # Public domain
 
-# $Id: mkill,v 1.9 2014/10/11 00:09:12 friedman Exp $
-
 # Commentary:
 # Code:
 
 use strict;
-use Symbol;
-
-$^W = 1; # enable warnings
-
-(my $progname = $0) =~ s=^.*/==;
+use warnings qw(all);
 
 sub xcat
 {
-  my $fh = gensym;
-  open ($fh, $_[0]) || return;
+  open( my $fh, $_[0] ) or return;
   local $/ = undef;
   return scalar <$fh>;
 }
 
 sub basename
 {
-  local $_ = shift;
-  s=.*/==;
+  (local $_ = shift) =~ s=.*/==;
   return $_;
 }
 
 
 sub pids
 {
-  my $dfh = gensym;
-  opendir ($dfh, "/proc") || return ;
-  my @pids = sort { $a <=> $b } grep { /^\d+$/ && $_ != $$ } readdir $dfh;
-  closedir ($dfh);
+  opendir( my $dfh, "/proc" ) or return ;
+  my @pids = sort { $a <=> $b
+                  } grep { /^\d+$/ && $_ != $$
+                         } readdir( $dfh );
+  closedir( $dfh );
 
-  if ($> != 0)
-    {
-      # Filter out any processes not run by us
-      return grep { uid ($_) == $> } @pids;
-    }
+  # Filter out any processes not run by us if non-root
+  return grep { uid( $_ ) == $> } @pids if $> != 0;
   return @pids;
 }
 
 sub cmdline
 {
   my $pid = shift;
-  my $cmdline = xcat ("/proc/$pid/cmdline");
+  my $cmdline = xcat( "/proc/$pid/cmdline" );
   return unless defined $cmdline;
-  return split (/\0/, $cmdline) unless $cmdline eq "";
-  return stat_name ($pid);
+  return split( /\0/, $cmdline ) unless $cmdline eq "";
+  return stat_name( $pid );
 }
 
 sub exe
 {
   my $pid = shift;
-  my $exe = readlink ("/proc/$pid/exe");
-  return $exe;
+  return readlink( "/proc/$pid/exe" );
 }
 
 my %stat_data;
@@ -68,23 +57,22 @@ sub stat_data
 {
   my $pid = shift;
   return $stat_data{$pid} if exists $stat_data{$pid};
-  my $stat = xcat ("/proc/$pid/status");
-  return unless defined $stat;
+  my $stat = xcat( "/proc/$pid/status" ) or return;
   $stat_data{$pid} = $stat;
-  return $stat;
 }
 
 sub stat_name
 {
-  my $stat = stat_data ($_[0]);
-  return unless defined $stat;
+  my $pid = shift;
+  my $stat = stat_data( $pid ) or return;
   return $1 if $stat =~ m|^Name:\s+(.*)|m;
+  return undef;
 }
 
 sub uid
 {
-  my $stat = stat_data ($_[0]);
-  return 0 unless defined $stat;
+  my $pid = shift;
+  my $stat = stat_data( $pid ) or return 0;
   return $1 if $stat =~ m|^Uid:\s+(\d+)|m;
   return 0;
 }
@@ -94,20 +82,20 @@ sub pidof
   my ($name) = @_;
   my $re = ($name =~ m|^/(.*)/$| ? $1 : undef);
 
-  my @allpids = pids ();
+  my @allpids = pids();
   my @pid;
   for my $p (@allpids)
     {
-      my @cmdline = cmdline ($p);
+      my @cmdline = cmdline( $p );
       map { if (defined $_
                 && ($_ eq $name
-                    || basename ($_) eq $name
+                    || basename( $_ ) eq $name
                     || (defined $re && $_ =~ $re)))
               {
                 push @pid, $p;
                 next;
               }
-          } (@cmdline[0,1,2], exe($p), stat_name($p));
+          } (@cmdline[0,1,2], exe( $p ), stat_name( $p ));
     }
   return @pid;
 }
@@ -118,22 +106,22 @@ sub main
 
   if ($_[0] =~ /^-(\d+|(?:sig)?[a-z0-9+-]+)$/i)
     {
-      $signal = uc ($1);
+      $signal = uc( $1 );
       shift;
     }
 
   unless (@_)
     {
+      (my $progname = $0) =~ s=^.*/==;
       print STDERR "Usage: $progname -signal procname ...\n";
       print STDERR "   or  $progname -signal /regex/ ...\n";
-      exit (1);
+      exit( 1 );
     }
 
   my $exitstat = 0;
-
   for my $procname (@_)
     {
-      my @pid = pidof ($procname);
+      my @pid = pidof( $procname );
       unless (@pid)
         {
           # If signal is 0, we're checking for process existence.
@@ -141,30 +129,31 @@ sub main
           next;
         }
 
-      if ($> == 0)
+      if ($> == 0)  # for root invocation, show owner too
         {
-          map { my $cmdline = join (" ", cmdline ($_));
-                my $user = getpwuid (uid ($_));
-                printf ("%d %s: %s\n", $_, $user, $cmdline);
+          map { my $cmdline = join( " ", cmdline( $_ ));
+                my $uid  = uid( $_ );
+                my $user = getpwuid( $uid ) || $uid;
+                printf( "%d %s: %s\n", $_, $user, $cmdline );
               } @pid;
         }
       else
         {
-          map { my $cmdline = join (" ", cmdline ($_));
-                printf ("%d: %s\n", $_, $cmdline);
+          map { my $cmdline = join( " ", cmdline( $_ ));
+                printf( "%d: %s\n", $_, $cmdline );
               } @pid;
         }
 
-      map { unless (kill ($signal, $_))
+      map { unless (kill( $signal, $_ ))
               {
                 print STDERR "kill: $_: $!\n";
                 $exitstat = 1;
               }
           } @pid;
     }
-  exit ($exitstat);
+  exit( $exitstat );
 }
 
-main (@ARGV);
+main( @ARGV );
 
 # eof
