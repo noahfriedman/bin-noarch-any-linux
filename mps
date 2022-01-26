@@ -1,7 +1,8 @@
 #!/usr/bin/env perl
-# $Id: mps,v 1.10 2017/05/04 23:48:39 friedman Exp $
 
-$^W = 1; # enable warnings
+use strict;
+use warnings;
+no  warnings qw(qw);
 
 use FindBin;
 use lib "$FindBin::Bin/../../../lib/perl";
@@ -9,7 +10,6 @@ use lib "$ENV{HOME}/lib/perl";
 
 use NF::FmtCols;
 use POSIX;
-use strict;
 
 # Meaning of columns:
 #    1:  1 = right-justify
@@ -157,7 +157,8 @@ sub main
   unshift @_, qw(ps);
 
   open (my $fh, "-|", @_) || die "fork: $!\n";
-  my @lines = grep { chomp; !/@_|$0/ } <$fh>;
+  my $childstr = quotemeta ("@_");
+  my @lines = grep { chomp; !/$childstr|$0/ } <$fh>;
   close ($fh);
 
   fixup_lwpname (\@lines) if $show_lwpname;
