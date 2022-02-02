@@ -220,6 +220,7 @@ sub parse_options
 
   delete_field( 'pgid' ) unless $opt{pgid};
   delete_field( 'sid'  ) unless $opt{sid};
+  delete_field( 'drs'  ) unless $opt{drs};
 
   # Not checked with getopt because args are not consumed.
   $opt{lwp} = check_option( qr/^[^-]*H/, [qw(comm lwp wchan)], @ARGV );
