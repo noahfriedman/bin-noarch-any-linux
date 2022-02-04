@@ -112,10 +112,11 @@ sub fixup_lstart
   my %mon = (map { $_ => ++$i }
              (qw(jan feb mar apr may jun jul aug sep oct nov dec)));
 
-  map { if (/(...)  ?(...) (\d\d) (\d\d):(\d\d):(\d\d) (\d{4})/)
+  map { if (/(...)  ?(...)  ?(\d?\d) (\d\d):(\d\d):(\d\d) (\d{4})/)
           {
             my $m = sprintf( "%02d", $mon{lc $2} );
-            s//$7-$m-$3 $4:$5:$6/;
+            my $d = sprintf( "%02d", $3 );
+            s//$7-$m-$d $4:$5:$6/;
           }
       } @$lines;
 }
