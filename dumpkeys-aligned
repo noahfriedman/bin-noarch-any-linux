@@ -1,0 +1,33 @@
+#!/usr/bin/perl
+
+use strict;
+use warnings qw(all);
+
+my @modifier = (qw(plain shift altgr control alt shiftl shiftr ctrll ctrlr capsshift keycode _n = _keysym));
+my %col      = map { $modifier[$_] => $_ } (0 .. $#modifier);
+my $fmtcol   = join( "\t", ("%s") x (@modifier - 3)) . "\t%4s %s %s\n";
+
+sub main
+{
+  open( my $fh, "-|", (qw(dumpkeys -f1), @_)) or die;
+  while (<$fh>)
+  {
+    unless (/\skeycode\s/) { print; next }
+
+    my @row = ("") x @modifier;
+    for my $elt (split( /\s+/, $_ ))
+      {
+        my $pos = $col{$elt};
+        if (defined $pos)       { 0 }
+        elsif ($elt =~ /^\d+$/) { $pos = $col{_n} }
+        else                    { $pos = $col{_keysym} }
+        $row[$pos] = $elt;
+      }
+
+    printf( $fmtcol, @row );
+  }
+}
+
+main( @ARGV );
+
+# eof
