@@ -207,6 +207,7 @@ sub parse_options
     ('h|help+' => \$help,
      'usage'   => sub { $help = 1 },
 
+     'lwp'     => \$opt{lwp},
      'pgid'    => \$opt{pgid},
      'sid'     => \$opt{sid},
      'drs'     => \$opt{drs},
@@ -224,7 +225,8 @@ sub parse_options
   delete_field( 'drs'  ) unless $opt{drs};
 
   # Not checked with getopt because args are not consumed.
-  $opt{lwp} = check_option( qr/^[^-]*H/, [qw(comm lwp wchan)], @ARGV );
+  $opt{lwp} = check_option( qr/^[^-]*[Hm]/, [qw(comm lwp wchan)], @ARGV )
+    unless $opt{lwp};
 
   delete_field( 'context' )
     unless $ENV{MPS_CONTEXT} && -d "/sys/fs/selinux/booleans";
