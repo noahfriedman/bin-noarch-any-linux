@@ -230,6 +230,14 @@ sub parse_options
 
   delete_field( 'context' )
     unless $ENV{MPS_CONTEXT} && -d "/sys/fs/selinux/booleans";
+
+  my $psver = `ps --version`;
+  if ($psver =~ /version 3.[12]/)
+    {
+      # Remove unsupported
+      delete_field( 'cpuid', 'nlwp' );
+      map { $_->[0] =~ s/=.*// } @field;
+    }
 }
 
 sub main
