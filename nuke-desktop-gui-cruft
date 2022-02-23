@@ -1,24 +1,26 @@
 #!/bin/sh
-# $Id: nuke-desktop-gui-cruft,v 1.12 2016/10/12 00:35:20 friedman Exp $
 
 procs='
-  /^gvfsd/
   /^gvfs-/
+  /^gvfsd/
   /gnome-.*-daemon/
-  gnome-screensaver
-  dconf-service
-  gconfd-2
-  menu-cached
-  notification-daemon
-  idn
+  /ibus/
   aspell
   at-spi-bus-launcher
   at-spi2-registryd
+  dconf-service
   evolution-addressbook-factory
+  gconfd-2
+  glib-pacrunner
+  gnome-screensaver
   goa-daemon
   goa-identity-service
+  idn
   libsocialweb-core
+  menu-cached
   mission-control-5
+  obexd
+  notification-daemon
   telepathy-logger
   xdg-desktop-portal
   xdg-document-portal
