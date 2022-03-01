@@ -2,32 +2,124 @@
 
 # Add -I or --binary-files=without-match skip binary files
 
-options=(--perl-regexp
+options=(
+    --perl-regexp
 
-         --devices=skip
-         --directories=recurse
+    --devices=skip
+    --directories=recurse
 
-         --line-number
-         #--initial-tab
+    --line-number
+    #--initial-tab
 
-         --exclude='*~'
-         --exclude='#*#'
-         --exclude='*.elc'
-         --exclude='*.[oa]'
-         --exclude='*.py[co]'
-         --exclude='.#*'
-         --exclude='COPYING*'
-         --exclude='*LICENSE*'
+    --exclude-dir=CVS
+    --exclude-dir=RCS
+    --exclude-dir=.bzr
+    --exclude-dir=.git
+    --exclude-dir=.hg
+    --exclude-dir=.svn
 
-         --exclude-dir=CVS
-         --exclude-dir=RCS
-         --exclude-dir=.bzr
-         --exclude-dir=.git
-         --exclude-dir=.hg
-         --exclude-dir=.svn
+    #--color=auto
+)
 
-         #--color=auto
-      )
+exclude_pats=(
+    '*~'
+    '.#*'
+    '#*#'
+    '*.[oa]'
+    '*.elc'
+    '*.py[co]'
+
+    'COPYRIGHT*'
+    'COPYING*'
+    '*LICENSE*'
+    'GPL*'
+    'LGPL*'
+)
+
+exclude_pats_extra=(
+    #'ChangeLog*'
+    #'NEWS*'
+
+    '*.cr[lt]'
+    '*.key'
+    '*.pem'
+
+    '*.7z'
+    '*.t[bgx]z'
+    '*.tbz2'
+    '*.zip'
+    '*.zoo'
+
+    '*.cab'
+    '*.msi'
+    '*.vsix'
+
+    '*.ja'
+    '*.jar'
+    '*.xpi'
+
+    '*.apk'
+
+    '*.bz2'
+    '*.gz'
+    '*.lz*'
+    '*.xz'
+
+    '*.exe'
+    '*.so'
+    '*.so.[0-9]*'
+
+    '*.pf[ab]'
+    '*.ttf'
+    '*.woff2'  # Web Open Font Format, version 2
+
+    '*.eps'
+    '*.ps'
+    '*.pdf'
+
+    '*.bmp'
+    '*.gif'
+    '*.icns'
+    '*.ico'
+    '*.jpeg'
+    '*.jpg'
+    '*.png'
+    '*.tiff'
+    '*.ai'
+    '*.svg'
+    '*.pnm'
+    '*.x[bp]m'
+
+    '*.avi'
+    '*.avif'
+    '*.flv'
+    '*.mkv'
+    '*.mov'
+    '*.mp[4g]'
+    '*.web[mp]'
+
+    '*.divx'
+    '*.dvd'
+    '*.iso'
+
+    '*.au'
+    '*.flac'
+    '*.m4[ab]'
+    '*.mp3'
+    '*.ogg'
+    '*.opus'
+    '*.pcm'
+    '*.rtp'
+    '*.wav'
+)
+
+case $1 in
+    -X ) shift; exclude_pats+=("${exclude_pats_extra[@]}") ;;
+esac
+
+for pat in "${exclude_pats[@]}"; do
+    options+=( --exclude="$pat" --exclude="${pat^}" --exclude="${pat^^}" )
+done
 
 exec grep "${options[@]}" "$@"
 
