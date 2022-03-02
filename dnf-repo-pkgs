@@ -1,4 +1,14 @@
-#!/bin/sh
+#!/bin/bash
+
+queryformat='%{installsize}\t%{name}\t%{version}-%{release}\t%{arch}\t%{buildtime}\t%{reponame}\t%{summary}'
+brief=false
+
+case $1 in
+    -b | --brief | --brevity )
+        brief=true
+        queryformat='%{name}\t%{summary}'
+        shift ;;
+esac
 
 case $# in
     0 ) echo ${0##*/}: Specify a repo to list;
@@ -17,14 +27,20 @@ dnf_args=(
     --quiet
 
     repoquery
-    --queryformat '%{installsize}\t%{name}\t%{version}-%{release}\t%{arch}\t%{buildtime}\t%{reponame}\t%{summary}'
+    --queryformat "$queryformat"
     --available
     --latest-limit=1
     ${repo:+"$repo"}
 )
 
-${DNF-dnf} "${dnf_args[@]}" "$@" |
-    sort -k2,2 -k3,3V -k4,4 |
-    column -t -s'	' -R1
+if $brief; then
+    ${DNF-dnf} "${dnf_args[@]}" "$@" |
+        sort -k1,1 |
+        column -t -s'	'
+else
+    ${DNF-dnf} "${dnf_args[@]}" "$@" |
+        sort -k2,2 -k3,3V -k4,4 |
+        column -t -s'	' -R1
+fi
 
 # eof
