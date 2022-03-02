@@ -1,9 +1,70 @@
 #!/bin/sh
 
-LIBGL_ALWAYS_INDIRECT=t
-LIBGL_ALWAYS_SOFTWARE=t
+nvidiap()
+{
+    glxinfo -B | grep -q '^OpenGL vendor string: NVIDIA'
+}
 
-export LIBGL_ALWAYS_INDIRECT
-export LIBGL_ALWAYS_SOFTWARE
+swconfig()
+{
+    if nvidiap ; then
+        # 2022-03-01 make sure this is *unset* if nvidia gpu is primary.
+        # It can cause Xorg server 1.20 (fedora 34) to crash.
+        # See comments in swconfig_debugging as well.
+        unset LIBGL_ALWAYS_INDIRECT
+    else
+        export LIBGL_ALWAYS_INDIRECT=1
+    fi
 
-exec ${1+"$@"}
+    export  LIBGL_ALWAYS_SOFTWARE=1
+    export  LIBGL_DRI3_DISABLE=1
+    export  LIBGL_DRI2_DISABLE=1
+
+    # The following is used by libglvnd, the open source backend dispatch
+    # api created for optimus.  If using nvidia, these must be set before the
+    # mesa variables have any chance of being honored.
+    # We wait to set this until after we've checked that nvidia is the
+    # current driver.
+    export  __GLX_VENDOR_LIBRARY_NAME=mesa
+}
+
+swconfig_debugging()
+{
+    # libglvnd
+    export __GL_SINGLETHREADED=1
+    export __GLVND_APP_ERROR_CHECKING=1
+    export __GLVND_ABORT_ON_APP_ERROR=1
+    export __GLVND_DISALLOW_PATCHING=1
+
+    # This seems to bypass swrast if set
+    unset   LIBGL_ALWAYS_INDIRECT
+
+    # mesa
+    export  LIBGL_DEBUG=verbose
+    export  LIBGL_DIAGNOSTIC=1
+    export  LIBGL_SHOW_FPS=1
+
+    export  MESA_DEBUG=1,flush,incomplete_tex,incomplete_fbo,context
+    export  MESA_VERBOSE=1
+
+    export  GALLIUM_HUD=simple,fps                      # 'help' for format
+    export  GALLIUM_DRIVER=${GALLIUM_DRIVER:-llvmpipe}  # softpipe
+}
+
+main()
+{
+    case $1 in
+        -d | -debug | --debug ) shift; GL_DEBUG=1 ;;
+    esac
+
+    swconfig
+    if [ -n "$GL_DEBUG" ]; then
+        swconfig_debugging
+    fi
+
+    exec "$@" || exit $?
+}
+
+main "$@"
+
+# eof
