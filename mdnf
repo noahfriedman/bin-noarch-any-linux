@@ -28,15 +28,16 @@
 # Needed in case we have to exec this using python 2.7 on fedora 22
 from __future__ import print_function
 
+import sys
 import fcntl
 import termios
 import struct
 
-def my_term_width(fd=1):
+def _my_term_width( fd=1 ):
     try:
         buf = 'abcdefgh'
-        buf = fcntl.ioctl(fd, termios.TIOCGWINSZ, buf)
-        ret = struct.unpack(b'hhhh', buf)[1]
+        buf = fcntl.ioctl( fd, termios.TIOCGWINSZ, buf )
+        ret = struct.unpack( b'hhhh', buf )[1]
         if ret == 0: return 256
         if ret < 20: return  20
         return ret
@@ -46,77 +47,98 @@ def my_term_width(fd=1):
 # We don't use this for the search command anymore, but
 # monkeypatch it for any other commands that might try to use it.
 from dnf.cli import term
-term._term_width = my_term_width
+term._term_width = _my_term_width
 
 
 import dnf.match_counter
 
-def _my_search(self, args):
-    search_all = False
-    if len(args) > 1 and args[0] == 'all':
-        args.pop(0)
-        search_all = True
-        self.base.conf.showdupesfromrepos = True
+column_brevity = False
 
+def _my_search( self, args ):
     counter = dnf.match_counter.MatchCounter()
-    for arg in args:
-        self._search_counted(counter, 'name',    arg)
-        self._search_counted(counter, 'summary', arg)
-        #self._search_counted(counter, 'arch',    arg)
 
-    if search_all or counter.total() == 0:
-        for arg in args:
-            self._search_counted(counter, 'description', arg)
-            self._search_counted(counter, 'url',         arg)
+    search_cols = [ 'name', 'summary' ]
+    if self.opts.all:
+        search_cols.extend( ('description', 'url') )
+
+    for arg in args:
+        for col in search_cols:
+            self._search_counted( counter, col, arg )
+
+    if not self.opts.all:
+        needles = len( args )
+        for pkg in tuple( counter.keys() ):
+            if len( counter.matched_needles( pkg )) != needles:
+                del counter[ pkg ]
 
     results = counter
     if not self.base.conf.showdupesfromrepos:
-        results = self.base.sack.query().filter(pkg=counter.keys()).latest()
+        results = self.base.sack.query().filterm( pkg=counter.keys() ).latest()
 
-    allargs = set (args)
-    row = []
-    def _sort_key (key):
-        return (sorted(counter.matched_needles (key)), str(key).lower())
-    for pkg in sorted (results, key=_sort_key):
-        if counter.matched_needles (pkg) != allargs: continue
-        row.append ((pkg.name,
-                     pkg.version + '-' + pkg.release,
-                     pkg.arch,
-                     pkg.reponame,
-                     pkg.summary))
+    allargs = set( args )
+    seen    = set()
+    row     = []
+    for pkg in sorted( results, key=lambda k: str( k ).lower() ):
+        if column_brevity:
+            if pkg.name in seen:
+                continue
+            seen.add( pkg.name )
+        elif not self.base.conf.showdupesfromrepos and not self.opts.all:
+            if pkg.name + pkg.arch in seen:
+                continue
+            seen.add( pkg.name + pkg.arch )
 
-    if len(row) == 0:
-        raise dnf.exceptions.Error('No matches found.')
+        if counter.matched_needles( pkg ) != allargs:
+            continue
 
-    width = [max(len(r[i]) for r in row) for i in range(len(row[0])-1)]
-    fmt = '  '.join ('%%-%ss' % w for w in width) + '  %s'
-    for r in row: print(fmt % r)
+        if column_brevity:
+            row.append( (pkg.name, pkg.summary) )
+        else:
+            row.append( (pkg.name,
+                         pkg.version + '-' + pkg.release,
+                         pkg.arch,
+                         pkg.reponame,
+                         pkg.summary) )
+
+    if len( row ) == 0:
+        raise dnf.exceptions.Error( 'No matches found.' )
+
+    width = [ max( len( r[i] ) for r in row )
+              for i in range( len( row[0] ))
+            ]
+    width[-1] = ''  # don't pad out last column
+    fmt = '  '.join ( '{{:<{}}}'.format( w ) for w in width )
+    for r in row:
+        print( fmt.format( *r ))
 
 # monkeypatch
 from dnf.cli.commands import search
 search.SearchCommand._search = _my_search
 
 
-import sys
+if __name__ == '__main__':
+    try:
+        from dnf.cli import main
 
-def suppress_keyboard_interrupt_message():
-    old_excepthook = sys.excepthook
-    def new_hook(type, value, traceback):
-        if type != KeyboardInterrupt:
-            old_excepthook(type, value, traceback)
-        else: pass
-    sys.excepthook = new_hook
+        showdupes = True
+        for _ in range( 2 ):
+            if sys.argv[1] in ('-b', '--brief', '--brevity'):
+                column_brevity = True
+                sys.argv.pop( 1 )
+            elif sys.argv[1] in ('-u', '--unique'):
+                showdupes = False
+                sys.argv.pop( 1 )
 
-
-from dnf.cli import main
+        if sys.argv[1] in ( 'search', 'se' ):
+            myargs = ['--quiet', '--cacheonly']
+            if showdupes:
+                myargs.append( '--showduplicates' )
+            for arg in myargs:
+                sys.argv.insert( 1, arg )
 
-if __name__ == "__main__":
-    suppress_keyboard_interrupt_message()
+        main.user_main( sys.argv[1:], exit_code=True )
 
-    myargs = ('--cacheonly', '--quiet')
-    for arg in reversed(myargs):
-        sys.argv.insert(1, arg)
-
-    main.user_main(sys.argv[1:], exit_code=True)
+    except KeyboardInterrupt:
+        pass
 
 # eof
