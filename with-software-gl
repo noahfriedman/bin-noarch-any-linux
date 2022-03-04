@@ -12,8 +12,6 @@ swconfig()
         # It can cause Xorg server 1.20 (fedora 34) to crash.
         # See comments in swconfig_debugging as well.
         unset LIBGL_ALWAYS_INDIRECT
-    else
-        export LIBGL_ALWAYS_INDIRECT=1
     fi
 
     export  LIBGL_ALWAYS_SOFTWARE=1
