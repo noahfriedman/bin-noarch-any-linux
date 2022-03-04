@@ -9,8 +9,9 @@ export  __VK_LAYER_NV_optimus=NVIDIA_only
 export  VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/nvidia_icd.json
 
 export  __GL_SYNC_TO_VBLANK=0
+#export __GL_YIELD=USLEEP
 
-# Testing
+# for testing
 #export  __GL_SHOW_GRAPHICS_OSD=1
 
 exec "$@"
