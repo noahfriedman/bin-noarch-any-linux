@@ -1,5 +1,7 @@
 #!/bin/bash
-# $Id: xinit,v 1.2 2015/09/10 01:38:38 friedman Exp $
+
+declare -a client_args=()
+declare -a server_args=()
 
 deffirst()
 {
@@ -19,11 +21,60 @@ deffirst()
     return 0
 }
 
-sinit=${sinit-$HOME/etc/init}
+find_free_display()
+{
+    let i=0
+    while :; do
+        if [ -e /tmp/.X$i-lock ] || [ -S /tmp/.X11-unix/X$i ]; then
+            if ! grep -q -s /tmp/.X11-unix/X$i /proc/net/unix; then
+                break
+            fi
+        else
+            break
+        fi
+        i=$(( $i + 1 ))
+        test -e /tmp/.X${i}-lock && continue
+    done
+    NewDisplay=:$i
+}
 
-deffirst XINITRC   $HOME/.xinitrc   $sinit/share/xinitrc
-deffirst XSERVERRC $HOME/.xserverrc $sinit/share/xserverrc
+get_client_server_args()
+{
+    while [ $# -gt 0 ]; do
+        case $1 in
+            -- ) shift; break ;;
+        esac
+        client_args+=( "$1" )
+        shift
+    done
 
-exec run-next "$0" "$@"
+    while [ $# -gt 0 ]; do
+        case $1 in
+            :[0-9]* ) NewDisplay=$1 ;;
+        esac
+        server_args+=( "$1" )
+        shift
+    done
+
+    case ${NewDisplay:-notset} in
+        notset ) find_free_display
+                 server_args=( $NewDisplay "${server_args[@]}" )
+                 ;;
+    esac
+}
+
+main()
+{
+    get_client_server_args "$@"
+
+    sinit=${sinit-$HOME/etc/init}
+
+    deffirst XINITRC   $HOME/.xinitrc   $sinit/share/xinitrc
+    deffirst XSERVERRC $HOME/.xserverrc $sinit/share/xserverrc
+
+    exec run-next "$0" "${client_args[@]}" -- "${server_args[@]}"
+}
+
+main "$@"
 
 # eof
