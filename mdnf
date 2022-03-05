@@ -4,10 +4,9 @@
 # Created: 2016-08-03
 # Public domain
 
-# $Id: mdnf,v 1.1 2016/08/04 06:14:50 friedman Exp $
-
 # Commentary:
 
+# (2022-03-04 some of this is mitigated now, but its still hard to read)
 # I find it hard to read the output from 'dnf search' when results are not
 # in alphabetical order.  Its algorithm for prioritizing results isn't
 # transparent enough to make sense to me, especially when there are dozens
@@ -17,7 +16,6 @@
 #	* Results are in alphabetical order
 #	* Version number, architecture, and repository are included.
 #	* Columns are aligned
-#	* Searching on architecture provided
 # 	* If multiple search terms provided then select the conjunction,
 # 	  rather than the disjunction, of the results.  That is, results
 # 	  must match all terms, not just any of them.
@@ -25,7 +23,7 @@
 
 # Code:
 
-# Needed in case we have to exec this using python 2.7 on fedora 22
+# Needed in case we have to exec this using python2 on older fedoras
 from __future__ import print_function
 
 import sys
@@ -57,7 +55,7 @@ column_brevity = False
 def _my_search( self, args ):
     counter = dnf.match_counter.MatchCounter()
 
-    search_cols = [ 'name', 'summary' ]
+    search_cols = [ 'name', 'summary', ]
     if self.opts.all:
         search_cols.extend( ('description', 'url') )
 
@@ -79,14 +77,24 @@ def _my_search( self, args ):
     seen    = set()
     row     = []
     for pkg in sorted( results, key=lambda k: str( k ).lower() ):
+        # include version/release in 'seen' key, in case the repo has an
+        # updated version from what was installed.  Given this loop is
+        # sorted, we should see rows for installed packages before the
+        # corresponding repo one.
+        ukey = pkg.name + pkg.version + pkg.release + pkg.arch
+        if pkg.reponame == '@System':
+            shown_reponame = '*' + pkg.from_repo
+        else:
+            shown_reponame = ' ' + pkg.reponame
+
         if column_brevity:
+            # For brevity's sake we don't care about version, arch, etc.
             if pkg.name in seen:
                 continue
             seen.add( pkg.name )
-        elif not self.base.conf.showdupesfromrepos and not self.opts.all:
-            if pkg.name + pkg.arch in seen:
-                continue
-            seen.add( pkg.name + pkg.arch )
+        elif ukey in seen:
+            continue
+        seen.add( ukey )
 
         if counter.matched_needles( pkg ) != allargs:
             continue
@@ -97,7 +105,7 @@ def _my_search( self, args ):
             row.append( (pkg.name,
                          pkg.version + '-' + pkg.release,
                          pkg.arch,
-                         pkg.reponame,
+                         shown_reponame,
                          pkg.summary) )
 
     if len( row ) == 0:
@@ -116,29 +124,26 @@ from dnf.cli.commands import search
 search.SearchCommand._search = _my_search
 
 
-if __name__ == '__main__':
+# TODO: this still needs some work to be reusable in an interactive
+# session, because dnf's main entrypoint will barf on repeated attempts
+# to initialize plugins.
+def mdnf( args=sys.argv, exit_code=False ):
+    from dnf.cli import main
     try:
-        from dnf.cli import main
-
-        showdupes = True
-        for _ in range( 2 ):
-            if sys.argv[1] in ('-b', '--brief', '--brevity'):
-                column_brevity = True
-                sys.argv.pop( 1 )
-            elif sys.argv[1] in ('-u', '--unique'):
-                showdupes = False
-                sys.argv.pop( 1 )
-
-        if sys.argv[1] in ( 'search', 'se' ):
+        args = list( args ) # copy
+        if args[1] in ('-b', '--brief', '--brevity'):
+            global column_brevity
+            column_brevity = True
+            args.pop( 1 )
+        if args[1] in ( 'search', 'se' ):
             myargs = ['--quiet', '--cacheonly']
-            if showdupes:
-                myargs.append( '--showduplicates' )
-            for arg in myargs:
-                sys.argv.insert( 1, arg )
-
-        main.user_main( sys.argv[1:], exit_code=True )
-
+            for elt in myargs:
+                args.insert( 1, elt )
+        main.user_main( args[1:], exit_code=exit_code )
     except KeyboardInterrupt:
         pass
+
+if __name__ == '__main__':
+    mdnf( sys.argv, exit_code=True )
 
 # eof
