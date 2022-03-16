@@ -1,0 +1,3 @@
+#!/bin/sh
+
+glxinfo | sed -ne '/^OpenGL renderer string: /s///p'
