@@ -1,43 +1,61 @@
-#!/bin/sh
+#!/bin/bash
 
-procs='
-  /^gvfs-/
-  /^gvfsd/
-  /gnome-.*-daemon/
-  /ibus/
-  aspell
-  at-spi-bus-launcher
-  at-spi2-registryd
-  dconf-service
-  evolution-addressbook-factory
-  gconfd-2
-  glib-pacrunner
-  gnome-screensaver
-  goa-daemon
-  goa-identity-service
-  idn
-  libsocialweb-core
-  menu-cached
-  mission-control-5
-  obexd
-  notification-daemon
-  telepathy-logger
-  xdg-desktop-portal
-  xdg-document-portal
-  xdg-permission-store
-'
+# Stop these user services first, because that will gracefully shut down a
+# lot of the other stuff.
+systemd_driven=(
+    dbus
+)
 
-extra='
+systemd_driven_extra=(
+    pipewire
+    pipewire-pulse
+)
+
+usystemctl() { systemctl -q --user "$@"; }
+
+
+procs=(
+    /^gvfs-/
+    /^gvfsd/
+    /gnome-.*-daemon/
+    /ibus/
+    aspell
+    at-spi-bus-launcher
+    at-spi2-registryd
+    dconf-service
+    evolution-addressbook-factory
+    gconfd-2
+    glib-pacrunner
+    gnome-screensaver
+    goa-daemon
+    goa-identity-service
+    idn
+    libsocialweb-core
+    menu-cached
+    mission-control-5
+    obexd
+    notification-daemon
+    telepathy-logger
+    xdg-desktop-portal
+    xdg-document-portal
+    xdg-permission-store
+)
+
+extra=(
   npviewer.bin
   mozplugger-helper
   plugin-container
   gpg-agent
-'
+)
 
 case $1 in
-  -f ) procs="$procs $extra"; shift ;;
+  -f ) system_driven+=( "${system_driven_extra[@]}" )
+       procs+=( "${extra[@]}" )
+       shift ;;
 esac
 
-exec mkill $procs
+usystemctl stop "${systemd_driven[@]}" 2> /dev/null
+
+exec mkill "${procs[@]}"
 
 # eof
