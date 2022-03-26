@@ -2,16 +2,8 @@
 
 # Stop these user services first, because that will gracefully shut down a
 # lot of the other stuff.
-systemd_driven=(
-    dbus
-)
-
-systemd_driven_extra=(
-    pipewire
-    pipewire-pulse
-)
-
-usystemctl() { systemctl -q --user "$@"; }
+      systemd_driven=( dbus )
+extra_systemd_driven=( pipewire pipewire-pulse )
 
 
 procs=(
@@ -41,7 +33,7 @@ procs=(
     xdg-permission-store
 )
 
-extra=(
+extra_procs=(
   npviewer.bin
   mozplugger-helper
   plugin-container
@@ -49,13 +41,12 @@ extra=(
 )
 
 case $1 in
-  -f ) system_driven+=( "${system_driven_extra[@]}" )
-       procs+=( "${extra[@]}" )
+  -f )          procs+=( "${extra_procs[@]}" )
+       systemd_driven+=( "${extra_systemd_driven[@]}" )
        shift ;;
 esac
 
-usystemctl stop "${systemd_driven[@]}" 2> /dev/null
-
+systemctl -q --user stop "${systemd_driven[@]}"
 exec mkill "${procs[@]}"
 
 # eof
