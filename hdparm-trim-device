@@ -1,0 +1,32 @@
+#!/bin/false
+
+print_ranges()
+{
+    local sectors=$1
+    local  offset=0
+    local   range=65535
+
+    while [ $offset -lt $sectors ]; do
+        echo $offset:$range
+        offset=$(( $offset + $range ))
+    done
+}
+
+trim()
+{
+    local dev=$1
+    hdparm --trim-sector-ranges-stdin \
+           --please-destroy-my-drive \
+           "$dev"
+}
+
+main()
+{
+    devname=${1#/dev/}
+    read sectors < /sys/block/$devname/size
+    print_ranges $sectors | trim "$1"
+}
+
+main "$@"
+
+# eof
