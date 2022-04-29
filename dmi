@@ -1,5 +1,4 @@
 #!/bin/sh
-# $Id$
 
 cd /sys/class/dmi/id || exit $?
 
@@ -14,7 +13,7 @@ for prop in * ; do
     read val < $prop
     case $val in '' ) continue ;; esac
 
-    printf "%-18s %s\n" $prop "$val"
+    printf "%-20s %s\n" $prop "$val"
 done
 
 # eof
