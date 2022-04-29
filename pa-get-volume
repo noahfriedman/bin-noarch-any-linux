@@ -1,47 +1,241 @@
 #!/usr/bin/perl
-# $Id$
-
-$^W = 1;
 
 use strict;
+use warnings qw(all);
+
+use lib "$ENV{HOME}/lib/perl";
+
+use Getopt::Long;
+use Pod::Usage;
+
+use   List::Util qw(all max);
+use Scalar::Util qw(reftype);
+
+use NF::Repulse;
+use NF::PrintObject qw(:all);
+
+my %type_order  = order_names(qw( sink source sink_input source_output ));
+my %field_order = order_names(qw( type index volume mute name active_port is_default ));
+
+use enum qw( :C_ TYPE INDEX VOL MUTE NAME ACTIVE IS_DEFAULT );
+
+(my $progname = $0) =~ s|.*/||;
+my %opt = ( monitors => 0, );
+
+sub order_names   { my $i = 0; map { $_ => $i++ } @_ }
+sub ordered_names { my %o = @_; sort { $o{$a} cmp $o{$b} } keys %o }
 
 sub bt
 {
-  open (my $fh, "-|", @_) || die "exec: $_[0]: $!\n";
+  open( my $fh, "-|", @_ ) || die "exec: $_[0]: $!\n";
   local $/ = undef;
   return <$fh>;
 }
 
-sub main
+sub mkrowfmt
 {
-  my $text = bt (qw(pactl list));
+  my ($data, $sep, $fill) = @_;
+  $sep = '  ' unless defined $sep;
 
-  foreach $_ (split (/\n\n+/, $text))
+  my $ncols = scalar @{$data->[0]} ;
+  my @width = (0) x $ncols;
+
+  for my $row (@$data)
     {
-      next unless /^(sink|source)\s+#/i;
-      my $dev = lc $1;
-      my $num    = $1 if /^$dev\s+#(\d+)/i;
-      my $name   = $1 if /^\s+Name:\s+(\S+)/ms;
-      my $mute   = $1 if /^\s+Mute:\s*(\S+)/ms;
-      my $vol    = $1 if /^\s+Volume:\s+\S+:\s+(\d+)/ms;
-      my $pct    = $1 if /^\s+Volume:\s+\S+:\s+\d+\s+\/\s+(\d+)%/ms;
-      my $max    = $1 if /^\s+Base Volume:\s*(\d+)/ms;
-
-      $mute = "mute"   if $mute eq "yes";
-      $mute = "!mute"  if $mute eq "no";
-
-      if ($dev eq 'sink')
+      for (my $i = 0; $i < @width; $i++)
         {
-          my $active = $1 if /^\s+Active Port:\s*(\S+)/ms;
-          printf ("%-6s %2d %6d %5d %3d%% %5s %s %s\n",
-                  $dev, $num, $vol, $max, $pct, $mute, $name, $active);
-        }
-      elsif ($dev eq 'source')
-        {
-          printf ("%-6s %2d %6d %5d %3d%% %5s %s\n",
-                  $dev, $num, $vol, $max, $pct, $mute, $name);
+          my $elt = $row->[$i] || "";
+          my $elt_len = length( "$elt" );
+          $width[$i] = $elt_len if $elt_len > $width[$i];
         }
     }
+
+  my @fmtv = map { sprintf( "%%%ds", $_ ) } @width;
+  if ($fill)
+    {
+      my $default = $fill->{''};
+
+      for (my $i = 0; $i < $ncols; $i++)
+        {
+          my $pad  = defined $fill->{$i} ? $fill->{$i} : $default;
+          continue unless defined $pad;
+
+          my $sign = substr( $pad, 0, 1 );
+          if ($sign =~ /[---+]/)
+            {
+              substr( $fmtv[$i], 1, 0 ) = $sign;
+              $pad = substr( $pad, 1 );
+            }
+          if ($pad)
+            {
+              substr( $fmtv[$i], -1 ) = $pad;
+            }
+        }
+    }
+  $fmtv[-1] = '%s' if $fmtv[-1] =~ /^%-\d*s$/;
+  return join( $sep, @fmtv );
+}
+
+sub pa_get_data
+{
+  my $pactl = NF::Repulse->new( monitors => $opt{monitors} );
+
+  my $info = $pactl->server_info();
+  my $objs = $pactl->list();
+  $objs = $pactl->_filter_match_types( $objs, [keys %type_order] );
+
+  my %mute = ( 'yes' => 'mute',  'no' => '-', );
+  map { my $obj  = $_;
+
+        $obj->{active_port} ||= '';
+
+        my $default_key = 'default_' . $obj->{type};
+        $obj->{is_default} = $obj->{name} eq $info->{$default_key}
+          if exists $obj->{name} && exists $info->{$default_key};
+
+        my $obj_mute  = $obj->{mute};
+        my $mute_bool = $mute{$obj_mute} if defined $obj_mute;
+        $obj->{mute}  = defined $mute_bool ? $mute_bool : "-";
+
+
+        my $chan = $obj->{channel_map};
+        my $vol  = $obj->{volume};
+        my @volume = map { $vol->{$_}->[1] } @$chan;
+        splice( @volume, 1 ) if all { $_ == $volume[0] } @volume;
+        $obj->{volume} = join( '/', @volume );
+
+        unless (defined( $obj->{name} ))
+          {
+            my $prop = $obj->{properties} || {};
+            my @v = map { $prop->{$_} || () } (qw(application.process.id
+                                                  application.process.binary
+                                                  media.name
+                                                  node.target));
+            $v[2] = lc( $v[2] ) if @v >= 4;
+
+            my $fmt;
+            if ($obj->{type} eq 'sink_input')
+              {
+                push @v, $obj->{sink};
+                $fmt = '%d/%s: %s -> %s';
+                #$fmt = '%2$s[%1$d]: %3$s -> %4$s';
+              }
+            else
+              {
+                $fmt = '%d/%s: %s <- %s';
+                my $connected = $obj->{source};
+                if (defined $connected && $connected != 2**32-1 && $connected != $v[-1])
+                  {
+                    push @v, $connected;
+                    $fmt = '%s/%s: %s <- %5$s <- %4$s';
+                  }
+              }
+            $obj->{name} = sprintf( $fmt, @v );
+          }
+
+        __PP_DEBUG { [$obj->{description} || $obj->{properties}->{'application.name'}, @volume] };
+
+
+      } @$objs;
+
+  return $objs;
+}
+
+sub pa_table
+{
+  my $_objs = shift;
+
+  my @objs  = sort { ($type_order{$a->{type}} <=> $type_order{$b->{type}})
+                       #|| ((   exists $a->{properties} && exists $a->{properties}->{'priority.session'}
+                       #     && exists $b->{properties} && exists $b->{properties}->{'priority.session'})
+                       #    ? $a->{properties}->{'priority.session'} <=> $b->{properties}->{'priority.session'}
+                       #    : 0 )
+                       || ($a->{index} <=> $b->{index})
+                   } @$_objs;
+
+  my @fields = ordered_names( %field_order );
+  my @row;
+  for my $obj (@objs)
+    {
+      my @l = map { defined $obj->{$_} ? $obj->{$_} : "" } @fields;
+
+      $l[C_TYPE] .= "*" if $l[C_IS_DEFAULT];
+      splice( @l, C_IS_DEFAULT, 1); # remove it from array;
+
+      push @row, \@l;
+    }
+  return \@row;
+}
+
+sub parse_options
+{
+  local *ARGV = \@{$_[0]}; # modify our local arglist, not real ARGV.
+  my $help = -1;
+
+  my $parser = Getopt::Long::Parser->new;
+  $parser->configure (qw(bundling autoabbrev passthrough));
+
+  my $succ = $parser->getoptions
+    ('h|help|usage+'            => \$help,
+     'v|verbose+'               => \$opt{verbose},
+     'q|quiet'                  => sub { $opt{verbose} = 0 },
+
+     'i|sources:i@'             => \$opt{source}, #arrayraf
+     'o|sinks:i@'               => \$opt{sink},   #arrayraf
+
+     'M|monitors'               => \$opt{monitors},
+
+     'm|mute'                   => sub { $opt{mute} = 'on'     },
+     'u|unmute'                 => sub { $opt{mute} = 'off'    },
+     't|toggle'                 => sub { $opt{mute} = 'toggle' },
+    );
+
+  $help ||= 0; # but if not set yet, we need to set it here now.
+  pod2usage (-exitstatus => 1, -verbose => 0)     unless $succ;
+  pod2usage (-exitstatus => 0, -verbose => $help) if $help >= 0;
+
+  $opt{verbose} = 1 unless defined $opt{verbose};
+
+}
+
+sub main
+{
+  parse_options (\@_);
+
+  my $data = pa_get_data();
+  __PP_DEBUG { $data };
+  my $rows = pa_table( $data );
+
+  # Align device names so the first `.' lines up; the rest of the fields
+  # between dots are usually the same length and this makes the column
+  # overall easier to scan.
+  my @dot_off = ( map { ($_->[C_TYPE] =~ /input|output/
+                         ? -1
+                         : index( $_->[C_NAME] || '', '.' ))
+                      } @$rows );
+  my $dot_max = max( @dot_off );
+  for (my $i = 0; $i < @dot_off; $i++)
+    {
+      next unless $dot_off[$i] >= 0 && $dot_off[$i] < $dot_max;
+      substr( $rows->[$i]->[C_NAME], 0, 0) = (' ') x ($dot_max - $dot_off[$i]);
+    }
+
+  unshift @$rows, [ qw(TYPE DEVID VOL MUTE NAME PORT) ]; # header
+  my %just = ( (map { $_ => '-' } ('')), # left-justify by default
+               (map { $_ => ''  } (C_INDEX, C_VOL)),
+             );
+
+  my $fmt = mkrowfmt( $rows, '  ', \%just ) . "\n";
+  my $blanked = 0;
+  my $re = qr/_(?:input|output)$/;
+  map { __PP_DEBUG { $fmt, @$_ };
+        if (!$blanked && $_->[C_TYPE] =~ $re)
+          {
+            print "\n";
+            $blanked = 1;
+          }
+        printf( $fmt, @$_ );
+      } @$rows;
 }
 
 main (@ARGV);
