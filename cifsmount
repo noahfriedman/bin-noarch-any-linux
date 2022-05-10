@@ -1,5 +1,4 @@
 #!/bin/bash
-# $Id: cifsmount,v 1.6 2014/01/27 22:39:14 friedman Exp $
 
 apush() { eval "$1=(\"\${$1[@]}\" \"\${@:2}\")"; }
 
@@ -35,8 +34,8 @@ env_opts()
                       [gid]=`id -g`
                  [dir_mode]=0777
                 [file_mode]=0777
-                     [vers]=1.0
-                      [sec]=ntlm )
+                    #[vers]=1.0
+                      [sec]=ntlmssp )
 
     for var in ${!CIFSMOUNT_*}; do
         optname=${var#CIFSMOUNT_}  # strip prefix
