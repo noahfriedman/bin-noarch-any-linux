@@ -1,0 +1,2 @@
+#!/bin/sh
+exec basenc --base16 --decode "$@"
