@@ -7,6 +7,9 @@ print_ranges()
     local   range=65535
 
     while [ $offset -lt $sectors ]; do
+        if [ $(( $offset + $range )) -ge $sectors ]; then
+            range=$(( $sectors - $offset ))
+        fi
         echo $offset:$range
         offset=$(( $offset + $range ))
     done
