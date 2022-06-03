@@ -1,4 +1,4 @@
 #!/bin/sh
-find /sys -path '*/power/control' -print0 |
-      xargs -0 awk '!/auto/ { print FILENAME " = " $0 }' |
-      column -t -s= -o:
+find /sys -path '*/power/control' -print0               2> /dev/null |
+    xargs -0 awk '!/auto/ { print FILENAME " = " $0 }'  2> /dev/null |
+    column -t -s= -o:
