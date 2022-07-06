@@ -1,0 +1,95 @@
+#!/usr/bin/perl
+# raspi-license-patch -- Enable hardware MP2/WVC1 video decoders
+
+# Author: Noah Friedman <friedman@splode.com>
+# Created: 2022-07-05
+# Public domain
+
+# Commentary:
+
+# This script, which must be run as root, patches the startup code for
+# Raspberry Pi models 2 and 3 to bypass the license check for hardware
+# video decoding algorithms whose patents have now expired.  Previously,
+# serial number-bound licenses had to be purchased individually for each
+# board. Once patched, the system must be rebooted.
+
+# The actual binary patch sequences were found multiple places located by
+# web search.  The rest of this implementation was written by me.
+
+# n.b. The Raspberry Pi 4 has no hardware video decoders as its cpu is fast
+# enough to do it in software, using open source.
+
+# Code:
+
+use strict;
+use warnings qw(all);
+
+sub file_in
+{
+  open( my $fh, $_[0] ) or die "read: $_[0]: $!\n";
+  local $/ = undef;
+  return <$fh>;
+}
+
+sub file_out
+{
+  open( my $fh, "> $_[0]" ) or die "write: $_[0]: $!\n";
+  shift;
+  print $fh @_;
+}
+
+sub file_backup
+{
+  # Copy file to itself, making backup in the process, using coreutils
+  # `cp'.  Make numbered backups so that if patching fails for any reason,
+  # a second run of this script won't clobber a previous good copy.
+  # We could do this in pure perl, but this is considerably more concise
+  # than an equivalent perl implementation and doesn't distract from the
+  # core purpose of this script.
+  my @cp = (qw(cp --backup=numbered --preserve --force --verbose));
+  map { system( @cp, $_, $_ ) } @_;
+}
+
+sub find_startelf
+{
+  map { return $_ if -f $_
+      } ( @_,
+          '/flash/start.elf',    # libreelec
+          '/boot/start.elf',     # raspbian, xbian
+          '/boot/start_x.elf',   # osmc
+        );
+  die "Could not locate start(_x).elf\n";
+}
+
+sub main
+{
+  my $elf  = find_startelf( @_ );
+
+  # Use minimal path for external commands
+  local $ENV{PATH} = join( ':', qw(/opt/vc/bin /usr/bin /bin) );
+  map { system( qw(vcgencmd codec_enabled), $_ ) } (qw(MPG2 WVC1));
+
+  local $_ = file_in( $elf );
+  # inner group 1,2 == 0x34, 0x1d is for 2022 or later implementations.
+  # inner group 1,2 == 0x33, 0x3c is for earlier implementations.
+  # 0x1f branches to license enabled $pc
+  if (/(\x47\xe9(?:\x33|\x34)\x36\x32\x48(?:\x1d|\x3c))(\x18|\x1f)/)
+    {
+      my ($HS, $HT) = ($1, $2);
+      if ($HT eq chr( 0x18 ))
+        {
+          s/$HS\x18/$HS\x1f/;
+          file_backup( $elf );
+          file_out( $elf, $_ );
+        }
+      else
+        { print STDERR "$elf: No change needed.\n" }
+    }
+  else
+    {
+      print STDERR "$elf: No binary match.\n";
+      exit( 1 );
+    }
+}
+
+main( @ARGV );
