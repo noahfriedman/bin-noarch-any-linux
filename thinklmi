@@ -1,0 +1,45 @@
+#!/bin/sh
+
+attr_dir=/sys/class/firmware-attributes/thinklmi/attributes
+sep='|'
+
+values()
+{
+    local attr name curval posval
+    if [ $# -gt 0 ]; then
+        local pat=${1,,} # tolower
+    fi
+
+    for attr in $attr_dir/*; do
+        test -d $attr || continue
+
+        if [ $# -gt 0 ]; then
+            local attr_name=${attr##*/}
+            case ${attr_name,,} in
+                *$pat* ) : ;;
+                *      ) continue ;;
+            esac
+        fi
+
+        read name   < $attr/display_name
+        read curval < $attr/current_value
+        read posval < $attr/possible_values
+        posval=${posval//,/ }  # s/,/ /g
+
+        echo $name $sep $curval $sep $posval
+    done
+}
+
+main()
+{
+    case ${UID-`id -u`} in
+        0 ) : ;;
+        * ) exec sudo "$0" "$@" || exit $? ;;
+    esac
+
+    values "$@"  | column -t -s$sep -o$sep
+}
+
+main "$@"
+
+# eof
