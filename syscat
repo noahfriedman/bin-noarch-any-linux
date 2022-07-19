@@ -4,8 +4,6 @@
 # Created: 2017-10-06
 # Public domain
 
-# $Id: syscat,v 1.1 2017/10/07 00:17:39 friedman Exp $
-
 use strict;
 use warnings qw(all);
 
@@ -23,6 +21,7 @@ my %opt = ( bin => 0,
           );
 
 my %tbl;
+my %writable;
 my $maxlen = 0;
 
 sub parse_options
@@ -51,6 +50,11 @@ sub contents
   return unless -r _;     # _ reuses last stat call
   my $size    = -s _;
   return if $size > 4096; # skip entries that may be memory mappings
+
+  # Test owner write bit.  Don't use -w because we aren't interested if the
+  # current user can write to it, only that the owner (usually root) cat.
+  my @st = stat _;
+  $writable{$filename} = $st[2] & 0200;
 
   # we don't care about unreadable files or other permission problems
   open (my $fh, $filename) or return;
@@ -92,9 +96,10 @@ sub main
       map { contents ($_) } @_;
     }
 
-  my $fmt = sprintf ("%%-%ds : %%s\n", $maxlen);
+  my $fmt = sprintf ("%%-%ds %%s %%s\n", $maxlen);
   map { my $file = $_;
-        map { printf $fmt, $file, $_;
+        my $rw = $writable{$file} ? '=' : ':';
+        map { printf $fmt, $file, $rw, $_;
             } split (/\n+/, $tbl{$file});
       } sort keys %tbl;
 }
