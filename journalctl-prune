@@ -1,0 +1,3 @@
+#!/bin/sh
+journalctl --vacuum-size=1 --vacuum-time=1s --vacuum-files=1 --all "$@" # --rotate
+journalctl --disk-usage
