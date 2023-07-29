@@ -56,18 +56,24 @@ def _my_search( self, args ):
     counter = dnf.match_counter.MatchCounter()
 
     search_cols = [ 'name', 'summary', ]
-    if self.opts.all:
-        search_cols.extend( ('description', 'url') )
+    try:
+        if self.opts.all:
+            search_cols.extend( ('description', 'url') )
+    except AttributeError:
+        pass
 
     for arg in args:
         for col in search_cols:
             self._search_counted( counter, col, arg )
 
-    if not self.opts.all:
-        needles = len( args )
-        for pkg in tuple( counter.keys() ):
-            if len( counter.matched_needles( pkg )) != needles:
-                del counter[ pkg ]
+    try:
+        if not self.opts.all:
+            needles = len( args )
+            for pkg in tuple( counter.keys() ):
+                if len( counter.matched_needles( pkg )) != needles:
+                    del counter[ pkg ]
+    except AttributeError:
+        pass
 
     results = counter
     if not self.base.conf.showdupesfromrepos:
