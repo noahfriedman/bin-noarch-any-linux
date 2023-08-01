@@ -1,0 +1,76 @@
+#!/usr/bin/perl
+# remkfs4 -- reinitialize existing ext4 filesystem with same parameters
+# Author: Noah Friedman <friedman@splode.com>
+# Created: 2023-07-31
+# Public domain
+
+# Commentary:
+
+# mkfs.ext4 -N $(( 2 * 1024 ** 2 )) -m .01 -G 8192 -L label /dev/diskdev
+#
+# remkfs4 /dev/diskdev -F {-L newlabel -m .1 etc...}
+
+# Code:
+
+use strict;
+use warnings qw(all);
+
+my @cmd_mkfs    = qw( mkfs.ext4 );
+my @cmd_tune2fs = qw( tune2fs -c 0 -i 0 );
+
+my %mkfs_flag =
+  ( block_rsrv   =>  '-m',
+    block_size   =>  '-b',
+    flex_bg      =>  '-G',
+    inode_count  =>  '-N',
+    label        =>  '-L',
+    uuid         =>  '-U',
+  );
+
+my %parm =
+  ( uuid         => 'time',
+  );
+
+
+sub main
+{
+  my $dev = shift;
+  my $fsinfo = `tune2fs -l "$dev"`;
+  die unless $? == 0;
+
+  foreach (split( /[\r\n]+/, $fsinfo ))
+    {
+      if    (/^Filesystem volume name:\s+(.*)/) { $parm{label}        ||= $1 }
+      elsif (/^Filesystem UUID:\s+(.*)/)        { $parm{uuid}         ||= $1 }
+      elsif (/^Inode count:\s+(\d+)/)           { $parm{inode_count}  ||= $1 }
+      elsif (/^Block count:\s+(\d+)/)           { $parm{block_count}  ||= $1 }
+      elsif (/^Reserved block count:\s+(\d+)/)  { $parm{block_rsrv}   ||= $1 }
+      elsif (/^Block size:\s+(\d+)/)            { $parm{block_size}   ||= $1 }
+      elsif (/^Flex block group size:\s+(\d+)/) { $parm{flex_bg}      ||= $1 }
+    }
+  $parm{block_rsrv} = sprintf( "%.2f", 100 * $parm{block_rsrv} / $parm{block_count}) if ($parm{block_rsrv});
+
+  for my $k (sort keys %parm)
+    {
+      my $flag = $mkfs_flag{$k} or next;
+      push @cmd_mkfs, $flag, $parm{$k};
+    }
+  push @cmd_mkfs, @_, $dev;
+
+  print STDERR "** @cmd_mkfs\n";
+  system( @cmd_mkfs );
+
+  # Disabled for now, because these parameters are already the default.
+  #if ($? == 0)
+  #  {
+  #    push @cmd_tune2fs, $dev;
+  #    print STDERR "** @cmd_tune2fs\n";
+  #    system( @cmd_tune2fs );
+  #  }
+
+  exit( $? );
+}
+
+main( @ARGV );
+
+# eof
