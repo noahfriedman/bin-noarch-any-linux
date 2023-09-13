@@ -24,15 +24,17 @@ get_scsi_target()
 main()
 {
     case $# in
-        0 ) echo "Usage: $progname /dev/<device>" 1>&2
+        0 ) echo "Usage: $progname /dev/<device> ..." 1>&2
             exit 1 ;;
     esac
 
-    dev=${1#/dev/}
-    get_scsi_target $dev
+    for dev in "$@"; do
+        dev=${dev#/dev/}
+        get_scsi_target $dev
 
-    echo Detaching $target /dev/$dev
-    echo 1 > $target_path/delete
+        echo Detaching $target /dev/$dev
+        echo 1 > $target_path/delete
+    done
 }
 
 main "$@"
