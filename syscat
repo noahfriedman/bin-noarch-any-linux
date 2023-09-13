@@ -18,6 +18,8 @@ use NF::FileUtil qw(:all);
 
 my %opt = ( bin => 0,
             rec => 0,
+            fol => 0,
+            max => undef,
           );
 
 my %tbl;
@@ -36,6 +38,8 @@ sub parse_options
 
       "a|text!"          => \$opt{bin},  # like grep switch
       "r|recursive!"     => \$opt{rec},
+      "L|follow-links"   => \$opt{fol},
+      "m|max-depth=i"    => \$opt{max},
     );
 
   pod2usage (-exitstatus => 1, -verbose => 0)     unless $succ;
@@ -89,7 +93,7 @@ sub main
   push @_, directory_files (".") unless @_;
   if ($opt{rec})
     {
-      map { grind_over_tree ($_, \&contents) } @_;
+      map { grind_over_tree ($_, \&contents, undef, $opt{fol}, { _depth_max => $opt{max}}) } @_;
     }
   else
     {
