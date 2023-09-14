@@ -93,7 +93,7 @@ sub main
   push @_, directory_files (".") unless @_;
   if ($opt{rec})
     {
-      map { grind_over_tree ($_, \&contents, undef, $opt{fol}, { _depth_max => $opt{max}}) } @_;
+      map { grind_over_tree ($_, \&contents, undef, $opt{fol}, { depth_max => $opt{max}}) } @_;
     }
   else
     {
