@@ -1,0 +1,794 @@
+#!/usr/bin/env perl
+# getauxval - decode ELF loader auxillary vector
+# Author: Noah Friedman <friedman@splode.com>
+# Created: 2023-09-15
+# Public domain
+
+# Commentary:
+
+# Decodes the auxillary vector passed to programs by the linux
+# kernel's ELF binary loader.  This is similar to the output you
+# get from "LD_SHOW_AUXV=1 /bin/someprogram", except it's decoded
+# in more detail and you can inspect other running programs.
+
+# Code:
+
+package DataSection;
+
+use strict;
+use warnings qw(all);
+
+my $DATA_start;
+my %reading; # sections currently being read, to avoid recursion
+my @reading_stack;
+
+# Read in section from __DATA__ at end of file.
+sub get
+{
+  my ($data, $section, $numfields, $sep) = (shift, quotemeta (shift), @_);
+
+  if (exists $reading{$section})
+    {
+      my $stack = join( ' => ', @reading_stack, $section );
+      (my $progname = $0) =~ s=.*/==;
+      die "$progname: Cycle detected in DATA section: $stack\n";
+    }
+  $reading{$section} = 1;
+  push @reading_stack, $section;
+
+  $data      = {} unless defined $data;
+  $numfields = 1  unless defined $numfields;
+  $sep = qr/\s+/  unless defined $sep;
+
+  local $_ = '';
+  my $fh = *main::DATA{IO};
+  $DATA_start = tell $fh unless defined $DATA_start; # initialize once
+  my $begpos  = tell $fh; # remember where we were now, for recursion
+
+  seek ($fh, $DATA_start, 0); # go to start of all data
+  my $qsection = quotemeta( $section );
+  while (<$fh>) { last if /^__${qsection}__/ }
+  if (defined $_ && /^__${qsection}__\s*:\s*(\S+)/)
+    {
+      $data = get( $data, $1, $numfields, $sep );
+    }
+  else
+    {
+      while (<$fh>)
+        {
+          last if /^__/;
+          next if /^\x0c/; # ^L
+
+          s/\s*(?:$|#.*)//;
+          next unless m/^\s*(\S+)\s+(.+)/;
+
+          if ($1 eq 'INCLUDE')
+            { $data = get( $data, $2, $numfields, $sep ) }
+          else
+            { $data->{$1} = $numfields > 1 ? [split (/$sep/, $2)] : $2 }
+        }
+    }
+  seek ($fh, $begpos, 0); # restore caller's position
+  pop @reading_stack;
+  delete $reading{$section};
+
+  return $data;
+}
+
+
+package FileIO;
+
+use strict;
+use warnings qw(all);
+
+use base qw(IO::File);
+
+sub _perror
+{
+  my $self = shift;
+  my $arg0 = shift;
+  my $file = *$self->{filename};
+  warn( join( ': ', $arg0, $file, @_, "$!\n" ));
+  return; # void
+}
+
+sub open
+{
+  my $self = shift;
+  $self = $self->new() unless ref $self;
+  *$self->{filename} = $_[0]; # $self is a gensym; commandeer its hash slot
+
+  return $self->_perror( 'open' ) unless $self->SUPER::open( @_ );
+  return $self;
+}
+
+sub seek
+{
+  my $self = shift;
+
+  if (my $res = $self->sysseek( @_ )) { return $res }
+  return $self->_perror( 'seek' );
+}
+
+sub read
+{
+  my $self = shift;
+
+  if (my $res = $self->sysread( @_ )) { return $res }
+  return $self->_perror( 'read' );
+}
+
+sub cat
+{
+  my $self = shift;
+  my $fh = FileIO->open( @_ ) or return;
+  local $/ = undef;
+  scalar <$fh>;
+}
+
+
+package AuxV;
+
+use strict;
+use warnings qw(all);
+
+use Fcntl qw(:seek);
+
+my %auxv_type_map;
+
+sub new
+{
+  my $type  = shift;
+  my $class = ref ($type) || $type;
+  my $self  = bless {}, $class;
+
+  $self->{pid}  = shift;
+  $self->{auxv} = $self->auxv();
+  return $self;
+}
+
+sub auxv
+{
+  my $self = shift;
+
+  return $self->{auxv} if exists $self->{auxv};
+
+  my $pid  = $self->{pid};
+  local $_ = FileIO->cat( "/proc/$pid/auxv" ) or return;
+
+  my @qlist = unpack( "L!*", $_ ); # all unsigned quads (32 bits)
+  my @auxv;
+  push @auxv, [splice( @qlist, 0, 2 )] while @qlist;
+  $self->{auxv} = \@auxv;
+}
+
+sub auxv_type
+{
+  my ($self, $elt) = @_;
+
+  DataSection::get( \%auxv_type_map, q{AUXV_TYPE}, 2 ) unless %auxv_type_map;
+  my $type = $auxv_type_map{$elt->[0]} or return;
+  return $type;
+}
+
+sub type_name
+{
+  my ($self, $elt) = @_;
+  my $type = $self->auxv_type( $elt )
+    or return sprintf( '?? %1$s (%1$#x)', $elt->[0] );
+  return $type->[0];
+}
+
+sub find_type_vals
+{
+  my ($self, $type, $rawp) = @_;
+
+  my $auxv = $self->auxv();
+  map { ($self->type_name( $_ ) eq $type
+         ? ($rawp ? $_->[1] : $self->format( $_ ))
+         : ())
+      } @$auxv;
+}
+
+sub mem_seek
+{
+  my ($self, $offset, $whence) = @_;
+
+  $whence = SEEK_SET unless defined $whence;
+
+  my $fh = $self->{memfh};
+  unless (defined $fh)
+    {
+      my $pid = $self->{pid};
+      $fh = FileIO->open( "/proc/$pid/mem" ) or return;
+      $self->{memfh} = $fh;
+    }
+
+  my $res = $fh->seek( $offset, $whence ) or return;
+  return wantarray? ($res, $fh) : $fh;
+}
+
+
+sub format
+{
+  my ($self, $elt) = @_;
+
+  my $type = $self->auxv_type( $elt ) || [$elt->[0], 'UNKNOWN'];
+  my $fn = sprintf( '_format_%s', $type->[1] );
+  return $self->$fn( $elt );
+}
+
+sub _format_UNKNOWN { sprintf( '?? %1$d (%1$#x)', $_[1]->[1] ) }
+sub _format_DEC     { sprintf( '%qu',               $_[1]->[1] ) }
+sub _format_HEX     { sprintf( '%#x',               $_[1]->[1] ) }
+
+sub _format_STR
+{
+  my ($self, $elt) = @_;
+
+  my $addr = $elt->[1];
+  my $fh   = $self->mem_seek( $addr ) or return "*$addr";
+
+  my $buf;
+  my $pos = 0;
+  while (my $len = $fh->read( $buf, 8, $pos))
+    {
+      $pos += $len;
+      return $buf if $len < 8;
+      next unless $buf =~ /\0/;
+      $buf =~ s/\0.*//;
+      return $buf;
+    }
+}
+
+sub _format_RAND
+{
+  my ($self, $elt) = @_;
+
+  my $addr = $elt->[1];
+  my $fh   = $self->mem_seek( $addr ) or return "*$addr";
+  $fh->read( my $buf, 16 )            or return "";
+
+  my @vec = unpack( "C*", $buf );
+  return join( " ", map { sprintf( "%#02x", $_ ) } @vec );
+}
+
+sub _format_HWCAP
+{
+  my ($self, $elt) = @_;
+
+  my $hwcap = $self->HWCAP( $elt );
+  return $self->_format_bitfield( $elt ) unless $hwcap;
+
+  my $q = $elt->[1];
+  my @v;
+  for my $cap (sort { $a <=> $b } keys %$hwcap)
+    {
+      push @v, lc( $hwcap->{$cap} ) if $q & $cap;
+    }
+  return join( ' ', @v );
+}
+
+*_format_HWCAP2 = *_format_HWCAP;
+
+sub _format_bitfield
+{
+  my ($self, $elt, $width) = @_;
+  $width = 8 unless $width;
+
+  my $q = ref $elt ? $elt->[1] : $elt;
+
+  my @v;
+  my $mask = (1 << $width) - 1;
+  while( $q )
+    {
+      my $b = $q & $mask;
+      $q >>= $width;
+      unshift @v, sprintf( "%0${width}b", $b );
+    }
+  return "@v";
+}
+
+
+sub PLATFORM
+{
+  my $self = shift;
+  return $self->{PLATFORM} if defined $self->{PLATFORM};
+
+  my @platforms = $self->find_type_vals( 'PLATFORM' );
+  $self->{PLATFORM} = $platforms[0]; # there should be only one anyway
+}
+
+sub HWCAP
+{
+  my ($self, $elt) = @_;
+
+  my $type = (defined $elt
+              ? (ref $elt
+                 ? $self->type_name( $elt )
+                 : $elt)
+              : 'HWCAP');
+  my $hwcap = $self->{$type};
+  $hwcap = $self->{$type} = $self->_get_hwcapX( $type )
+    unless defined $hwcap;
+  return $hwcap if $hwcap && %$hwcap;
+  return;
+}
+
+sub _get_hwcapX
+{
+  my ($self, $type) = @_;
+
+  my $platform = $self->PLATFORM;
+  my $data = DataSection::get( {}, uc( "${type}_${platform}" ));
+
+  my %hwcap;
+  while (my ($k, $v) = each %$data)
+    {
+      if    ($k =~ /^0x/)     { $k = hex( $k ) }
+      elsif ($k =~ /^Oo(.*)/) { $k = oct( $1 ) }
+      else  { $k = (1 << $k) }
+      $hwcap{$k} = $v;
+    }
+  return \%hwcap;
+}
+
+
+package LinuxProc;
+
+use strict;
+use warnings qw(all);
+
+sub xcat
+{
+  open( my $fh, $_[0] ) or return;
+  local $/ = undef;
+  scalar <$fh>;
+}
+
+sub basename
+{
+  local $_ = shift;
+  s=.*/==;
+  return $_;
+}
+
+sub pids
+{
+  opendir( my $dfh, "/proc" ) or return ;
+  my @pids = sort { $a <=> $b } grep { /^\d+$/ } readdir( $dfh );
+  closedir( $dfh );
+  return @pids;
+}
+
+sub cmdline
+{
+  my $pid = shift;
+  my $cmdline = xcat( "/proc/$pid/cmdline" ) or return;
+  return split( /\0/, $cmdline );
+}
+
+sub exe
+{
+  my $pid = shift;
+  my $link = readlink( "/proc/$pid/exe" ) or return;
+  return $link;
+}
+
+sub status_name
+{
+  my $pid = shift;
+  local $_ = xcat( "/proc/$pid/status" ) or return;
+  return $1 if /^Name:\s*(.*)$/m;
+  return;
+}
+
+sub ppid
+{
+  my $pid = shift;
+  local $_ = xcat( "/proc/$pid/status" ) or return;
+  return $1 if /^PPid:\s*(\d+)/m;
+  return;
+}
+
+sub pidof
+{
+  my ($name) = @_;
+  my $re = ($name =~ m|^/(.*)/$| ? $1 : undef);
+
+  my @allpids = pids();
+  my @pid;
+  for my $p (@allpids)
+    {
+      my $ppid = ppid( $p );
+      next if $ppid == 2; # Skip kernel threads
+
+      my @cmdline = cmdline( $p );
+      if (@cmdline
+          && ($cmdline[0] eq $name
+              || basename ($cmdline[0]) eq $name
+              || (defined $re && $cmdline[0] =~ $re)))
+        {
+          push @pid, $p;
+          next;
+        }
+
+      my $exe = exe( $p );
+      if (defined $exe
+          && ($exe eq $name
+              || basename( $exe ) eq $name
+              || (defined $re && $exe =~ $re)))
+        {
+          push @pid, $p;
+          next;
+        }
+
+      my $stat_name = status_name( $p );
+      if (defined $stat_name
+          && ($stat_name eq $name
+              || (defined $re && $stat_name =~ $re)))
+        {
+          push @pid, $p;
+        }
+    }
+
+  return @pid;
+}
+
+
+package main;
+
+use strict;
+use warnings qw(all);
+
+sub print_pid_auxv
+{
+  my $pid = shift;
+
+  my $aux = AuxV->new( $pid );
+  my $eltlist = $aux->auxv();
+
+  for my $elt (@$eltlist)
+    {
+      my $name = $aux->type_name( $elt );
+      last if $name eq 'NULL';
+      printf( "%-18s %s\n", $name, $aux->format( $elt ));
+    }
+}
+
+sub pid_command
+{
+  my $pid = shift;
+  my @cmd;
+  unless (   (@cmd = LinuxProc::cmdline( $pid ))
+          || (@cmd = LinuxProc::exe( $pid ))
+          || (@cmd = LinuxProc::stat_name( $pid )))
+    { return "" }
+  return join( " ", @cmd );
+}
+
+sub main
+{
+  my $procname = @_ ? shift : $$;
+
+  my @pid = ($procname =~ /^\d+$/
+             ? $procname
+             : LinuxProc::pidof( $procname ));
+  die( "$procname: Cannot find process by name.\n" )
+    unless @pid;
+
+  unless (1|| $< == 0 || $> == 0)  # are (r|e)uid 0?
+    {
+      # Filter out all the pids whose auxv we can't read anyway.
+      my @rpid = map { -r "/proc/$_/auxv" ? $_ : () } @pid;
+      return unless @rpid;
+      @pid = @rpid;
+    }
+
+  if (@pid > 1)
+    {
+      map { printf( "%d: %s\n", $_, pid_command( $_ ));
+            print_pid_auxv( $_ );
+            print "\n";
+          } @pid;
+    }
+  else
+    {
+      unless (-d "/proc/$pid[0]")
+        {
+          warn( "$pid[0]: No such process\n" );
+          exit 1;
+        }
+      print_pid_auxv( $pid[0] );
+    }
+}
+
+main( @ARGV );
+
+__DATA__
+
+# Anything after a `#' is a comment and ignored.
+# Blank lines are ignored.
+
+# If a line starts with "INCLUDE X", read in section X as well as the current one.
+# Lines are evaluated in the order they are read, so later entries will
+# override earlier ones if the values in the first column collide.
+#
+# The syntax:  __SECTION_A__ : SECTION_B
+# acts as an include, but no further lines (if any) in SECTION_A are read.
+# This is for strict aliases.
+
+# For the HWCAP and HWCAP2 sections:
+# If column 0's value starts with `0x' or `0o', it's hex/oct literal.
+# If it starts with any other integer, it is treated as 1<<n .
+
+
+__AUXV_TYPE__
+
+# <linux/auxvec.h> and <elf.h>
+
+0		NULL			HEX		# end of vector
+1		IGNORE			DEC		# entry should be ignored
+2		EXECFD			DEC		# file descriptor of program
+3		PHDR			HEX		# ptr to program headers
+4		PHENT			DEC		# size of each prog header entry
+5		PHNUM			DEC		# number of program headers
+6		PAGESZ			DEC		# system page size
+7		BASE			HEX		# base address of interpreter
+8		FLAGS			HEX		# flags
+9		ENTRY			HEX		# entry point of program
+10		NOTELF			DEC		# program is not ELF
+11		UID			DEC		# real uid
+12		EUID			DEC		# effective uid
+13		GID			DEC		# real gid
+14		EGID			DEC		# effective gid
+15		PLATFORM		STR		# string identifying CPU for optimizations
+16		HWCAP			HWCAP		# arch dependent hints at CPU capabilities
+17		CLKTCK			DEC		# frequency at which times() increments
+18		FPUCW			DEC		# used FPU control word.
+19		DCACHEBSIZE		DEC		# data cache block size.
+20		ICACHEBSIZE		DEC		# instruction cache block size.
+21		UCACHEBSIZE		DEC		# unified cache block size.
+22		IGNOREPPC		DEC		# (for PPC) entry should be ignored.
+23		SECURE			DEC		# secure mode boolean
+24		BASE_PLATFORM		STR		# string identifying real platform, may differ from PLATFORM
+25		RANDOM			RAND		# address of 16 random bytes
+26		HWCAP2			HWCAP2		# extension of AT_HWCAP
+27		RSEQ_FEATURE_SIZE	DEC		# rseq supported feature size
+28		RSEQ_ALIGN		DEC		# rseq allocation alignment
+31		EXECFN			STR		# filename of program
+32		SYSINFO			HEX		# x86-specific, 32-bit only
+33		SYSINFO_EHDR		HEX		# x86-specific
+
+# Shapes of the caches, with more room to describe them.
+# *GEOMETRY are comprised of cache line size in bytes in the bottom 16 bits
+# and the cache associativity in the next 16 bits.
+40		L1I_CACHESIZE		DEC
+41		L1I_CACHEGEOMETRY	HEX
+42		L1D_CACHESIZE		DEC
+43		L1D_CACHEGEOMETRY	HEX
+44		L2_CACHESIZE		DEC
+45		L2_CACHEGEOMETRY	HEX
+46		L3_CACHESIZE		DEC
+47		L3_CACHEGEOMETRY	HEX
+
+51		MINSIGSTKSZ		DEC		# minimal stack size for signal delivery
+
+
+__HWCAP_X86_64__
+
+# 2023-09-17 no HWCAP macros defined in libc or kernel headers for x86/64
+# But these values always seem to match:
+#   $ LD_SHOW_AUXV=1 /bin/true | grep HWCAP:
+#   $ /lib64/ld-linux-x86-64.so.2 --list-diagnostics | grep -F 'features[0x0].cpuid[0x3]'
+#   $ cpuid --one-cpu --raw --leaf 1 | sed -ne 's/.*edx=/edx=/p'
+#   $ dmidecode -t 4
+
+0		FPU			# Onboard FPU
+1		VME			# Virtual Mode Extensions
+2		DE			# Debugging Extensions
+3		PSE			# Page Size Extension (4 MiB pages)
+4		TSC			# Time Stamp Counter and RDTSC insn
+5		MSR			# Model-Specific Registers
+6		PAE			# Physical Address Extension
+7		MCE			# Machine Check Exception
+8		CX8			# CMPXCHG8B
+9		APIC			# Advanced Programmable Interrupt Controller
+10		FNORD			# (reserved)
+11		SEP			# SYSENTER and SYSEXIT fast syscalls
+12		MTRR			# Memory Type Range Registers
+13		PGE			# Page Global Enable
+14		MCA			# Machine Check Architecture
+15		CMOV			# Conditional move (CMOV, FCMOV, FCOMI insns)
+16		PAT			# Page Attribute Table
+17		PSE36			# 36-bit page size extension
+18		PSN			# Processor Serial Number
+19		CLFSH			# Cache Line Flush instruction (SSE2)
+20		NX(IA64)		# No-Execute (IA64 only; X86 NX is EAX=80000001:EDX[20])
+21		DS			# Debug Store
+22		ACPI			# Onboard thermal control MSRs for ACPI
+23		MMX			# MMX instructions
+24		FXSR			# FXSAVE, FXRSTOR
+25		SSE			# Streaming SIMD Extensions
+26		SSE2			# Streaming SIMD Exensions 2
+27		SS			# Self-Snoop
+28		HTT			# Hyper-Threading/multicore supported
+29		TM			# Thermal Monitor
+30		IA64			# IA64 processor emulating x86
+31		PBE			# Pending Break Enable
+
+__HWCAP2_X86_64__
+
+0		RING3MWAIT		# MONITOR/MWAIT enabled in Ring 3
+1		FSGSBASE		# Kernel allows FSGSBASE in Ring 3
+
+
+__HWCAP_V7L__
+
+# <bits/hwcap.h>, <asm/hwcap.h>
+
+0		SWP
+1		HALF
+2		THUMB
+3		26BIT			# play it safe
+4		FASTMULT
+5		FPA
+6		VFP
+7		EDSP
+8		JAVA
+9		IWMMXT
+10		CRUNCH
+11		THUMBEE
+12		NEON
+13		VFPV3
+14		VFPV3D16		# also set for VFPv4-D16
+15		TLS
+16		VFPV4
+17		IDIVA
+18		IDIVT
+19		VFPD32			# set if vfp has 32 regs (not 16)
+20		LPAE
+21		EVTSTRM
+
+__HWCAP2_V7L__
+
+0		AES
+1		PMULL
+2		SHA1
+3		SHA2
+4		CRC32
+
+
+__HWCAP_V8L__  : HWCAP_V7L		# 32-bit mode of aarch64
+__HWCAP2_V8L__ : HWCAP2_V7L		# 32-bit mode of aarch64
+
+
+__HWCAP_AARCH64__
+
+# glibc/sysdeps/unix/sysv/linux/aarch64/bits/hwcap.h
+
+# In this section, if column starts with 0x, it's a hex number.
+# If it starts with any other sequence, eval it as 1<<n .
+
+0		FP
+1		ASIMD
+2		EVTSTRM
+3		AES
+4		PMULL
+5		SHA1
+6		SHA2
+7		CRC32
+8		ATOMICS
+9		FPHP
+10		ASIMDHP
+11		CPUID
+12		ASIMDRDM
+13		JSCVT
+14		FCMA
+15		LRCPC
+16		DCPOP
+17		SHA3
+18		SM3
+19		SM4
+20		ASIMDDP
+21		SHA512
+22		SVE
+23		ASIMDFHM
+24		DIT
+25		USCAT
+26		ILRCPC
+27		FLAGM
+28		SSBS
+29		SB
+30		PACA
+31		PACG
+
+
+__HWCAP2_AARCH64__
+
+0		DCPODP
+1		SVE2
+2		SVEAES
+3		SVEPMULL
+4		SVEBITPERM
+5		SVESHA3
+6		SVESM4
+7		FLAGM2
+8		FRINT
+9		SVEI8MM
+10		SVEF32MM
+11		SVEF64MM
+12		SVEBF16
+13		I8MM
+14		BF16
+15		DGH
+16		RNG
+17		BTI
+18		MTE
+
+
+
+__HWCAP_POWERPC__
+# glibc/sysdeps/powerpc/bits/bits/hwcap.h
+
+0x80000000	32			# 32-bit mode.
+0x40000000	64			# 64-bit mode.
+0x20000000	601_INSTR		# 601 chip, old power isa.
+0x10000000	HAS_ALTIVEC		# SIMD/Vector unit.
+
+0x08000000	HAS_FPU			# Floating Point Unit.
+0x04000000	HAS_MMU			# Memory Management Unit.
+0x02000000	HAS_4XXMAC		# 4xx Multiply Accumulator.
+0x01000000	UNIFIED_CACHE		# Unified I/D Cache.
+
+0x00800000	HAS_SPE			# Signal Processing ext.
+0x00400000	HAS_EFP_SINGLE		# SPE Float.
+0x00200000	HAS_EFP_DOUBLE		# SPE Double.
+0x00100000	NO_TB			# 601/403gx have no timebase
+
+0x00080000	POWER4			# POWER4 ISA 2.00
+0x00040000	POWER5			# POWER5 ISA 2.02
+0x00020000	POWER5_PLUS		# POWER5+ ISA 2.03
+0x00010000	CELL_BE			# CELL Broadband Engine
+
+0x00008000	BOOKE			# ISA Category Embedded
+0x00004000	SMT			# Simultaneous Multi-Threading
+0x00002000	ICACHE_SNOOP
+0x00001000	ARCH_2_05		# ISA 2.05
+
+0x00000800	PA6T			# PA Semi 6T Core
+0x00000400	HAS_DFP			# Decimal FP Unit
+0x00000200	POWER6_EXT		# P6 + mffgpr/mftgpr
+0x00000100	ARCH_2_06		# ISA 2.06
+
+0x00000080	HAS_VSX			# P7 Vector Extension.
+0x00000040	PSERIES_PERFMON_COMPAT
+
+0x00000004	(reserved)		# Reserved by the kernel. Do not use.
+0x00000002	TRUE_LE
+0x00000001	PPC_LE
+
+
+__HWCAP2_POWERPC__
+# glibc/sysdeps/powerpc/bits/bits/hwcap.h
+
+0x80000000	ARCH_2_07		# ISA 2.07
+0x40000000	HAS_HTM			# Hardware Transactional Memory
+0x20000000	HAS_DSCR		# Data Stream Control Register
+0x10000000	HAS_EBB			# Event Base Branching
+
+0x08000000	HAS_ISEL		# Integer Select
+0x04000000	HAS_TAR			# Target Address Register
+0x02000000	HAS_VEC_CRYPTO		# Target supports vector instruction.
+0x01000000	HTM_NOSC		# Kernel aborts transaction when a syscall is made.
+
+0x00800000	ARCH_3_00		# ISA 3.0
+0x00400000	HAS_IEEE128		# VSX IEEE Binary Float 128-bit
+0x00200000	DARN			# darn instruction.
+0x00100000	SCV			# scv syscall.
+
+0x00080000	HTM_NO_SUSPEND		# TM without suspended state.
+0x00040000	ARCH_3_1		# ISA 3.1.
+0x00020000	MMA			# Matrix-Multiply Assist.
+
+__END__
