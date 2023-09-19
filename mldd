@@ -69,7 +69,12 @@ sub process_one
 
 sub main
 {
-  local $_ = bt( 'run-next', $0, @_ );
+  (my $prog = $0) =~ s=.*/==;
+  if ($prog eq 'ldd')
+    { unshift @_, ('run-next', $0) }
+  else
+    { unshift @_, 'ldd' }
+  local $_ = bt( @_ );
 
   # get rid of address mappings I don't care about
   s/\s+\(0x[0-9a-f]+\)//gm;
