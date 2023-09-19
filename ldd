@@ -1,0 +1,96 @@
+#!/usr/bin/env perl
+# ldd - wrapper around /bin/ldd to make output easier to read
+# Author: Noah Friedman <friedman@splode.com>
+# Created: 2023-09-18
+# Public domain
+
+# Commentary:
+
+# This just does some filtering and column alignment.
+# Memory addresses are filtered out.
+
+# Code:
+
+use strict;
+use warnings qw(all);
+
+sub bt
+{
+  open( my $fh, "-|", @_ ) || die "exec: $_[0]: $!\n";
+  local $/ = undef;
+  return <$fh>;
+}
+
+sub process_one
+{
+  local $_ = shift;
+  my @queue;
+  my $maxw1 = 0;
+  my $maxw2 = 0;
+
+  my @line = split( /\r?\n/, $_ );
+  while (@line)
+    {
+      $_ = shift @line;
+      my $w1 = /^(.*?)\s+=>\s/ ? length( $1 ) : length( $_ );
+      $maxw1 = $w1 if $w1 > $maxw1;
+      push @queue, $_;
+      last if /Version\s+information:/;
+    }
+  my $fmt = sprintf("%%-%ds => %%s\n", $maxw1);
+  map { if (/\s*=>\s*/)
+          { printf( $fmt, split( /\s*=>\s*/, $_, 2 )) }
+        else
+          { print $_, "\n"; }
+      } @queue;
+
+  undef @queue;
+  $maxw1 = 0;
+  while (@line)  # ldd -v (version information)
+    {
+      $_ = shift @line;
+      if (/^(.*?)\s+(\(.*?\))\s+=>\s/)
+        {
+          my ($w1, $w2) = (length( $1 ), length( $2 ));
+          $maxw1 = $w1 if $w1 > $maxw1;
+          $maxw2 = $w2 if $w2 > $maxw2;
+
+
+        }
+      push @queue, $_;
+    }
+  $fmt = sprintf( "%%-%ds %%-%ds => %%s\n", $maxw1, $maxw2 );
+  map { if (/^(.*?)\s+(\(.*?\))\s+=>\s+(.*)/)
+          { printf( $fmt, $1, $2, $3 ) }
+        else
+          { print $_, "\n" }
+      } @queue;
+}
+
+sub main
+{
+  local $_ = bt( 'run-next', $0, @_ );
+
+  # get rid of address mappings I don't care about
+  s/\s+\(0x[0-9a-f]+\)//gm;
+  if (/^[^\t].*:/)  # multiple programs
+    {
+      my @block = split( /^([^\t\r\n].*?:.*)/m, $_ );
+      shift @block if $block[0] eq '';
+      while (@block)
+        {
+          print shift @block;
+          process_one( shift @block );
+        }
+    }
+  else
+    {
+      # trim first leading tab on each line
+      s/^\t//gm;
+      process_one( $_ );
+    }
+}
+
+main( @ARGV );
+
+# eof
