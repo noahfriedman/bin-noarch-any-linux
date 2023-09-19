@@ -4,8 +4,6 @@
 # Created: 2017-04-18
 # Public domain.
 
-# $Id: mencfs,v 1.1 2017/04/18 10:39:17 friedman Exp $
-
 # Commentary:
 
 # encfs requires fully-qualified pathnames, so this fully-qualifies the
@@ -17,7 +15,7 @@
 
 # Code:
 
-# Don't juse use "cd $1 && pwd" because destination might not exist yet.
+# Don't just use "cd $1 && pwd" because destination might not exist yet.
 fqpath()
 {
     case $1 in
@@ -33,11 +31,6 @@ err()
     echo "${0##*/}: $*" 1>&2
     exit 1
 }
-
-# This lets you write: apush arrayvar newval
-# instead of: ${arrayvar[${#arrayvar[@]}]}=newval
-# Because c'mon, you've got to be kidding me.
-apush() { eval "$1=(\"\${$1[@]}\" \"\${@:2}\")"; }
 
 main()
 {
@@ -71,7 +64,7 @@ main()
     while :; do
         case $# in 0  ) break ;; esac
         case $1 in -- ) break ;; esac
-        apush encfsopts "$1"
+        encfsopts+=( "$1" )
         shift
     done
 
