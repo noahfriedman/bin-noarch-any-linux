@@ -126,8 +126,25 @@ def _my_search( self, args ):
         print( fmt.format( *r ))
 
 # monkeypatch
-from dnf.cli.commands import search
-search.SearchCommand._search = _my_search
+from dnf.cli.commands.search import SearchCommand
+SearchCommand._search = _my_search
+
+
+# Filter /usr/lib/.build-id files out of "repoquery --list" commands
+from dnf.cli.commands.repoquery import PackageWrapper
+from dnf.i18n import ucd
+
+def _files( self ):
+    nfiles = []
+    prefix = '/usr/lib/.build-id'
+    minlen = len( prefix )
+    for f in self._pkg.files:
+        if not (len( f ) >= minlen and f[ 0:minlen ] == prefix):
+            nfiles.append( f )
+    # mimic PackageWrapper.__getattr__
+    return '\n'.join( sorted( { ucd( elt ) for elt in nfiles } ))
+
+PackageWrapper.files = property( lambda self: _files( self ) )
 
 
 # TODO: this still needs some work to be reusable in an interactive
@@ -141,10 +158,9 @@ def mdnf( args=sys.argv, exit_code=False ):
             global column_brevity
             column_brevity = True
             args.pop( 1 )
+        args.insert( 1, '--quiet' )
         if args[1] in ( 'search', 'se' ):
-            myargs = ['--quiet', '--cacheonly']
-            for elt in myargs:
-                args.insert( 1, elt )
+            args.insert( 1, '--cacheonly' )
         main.user_main( args[1:], exit_code=exit_code )
     except KeyboardInterrupt:
         pass
