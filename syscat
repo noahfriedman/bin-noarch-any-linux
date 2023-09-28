@@ -7,24 +7,132 @@
 use strict;
 use warnings qw(all);
 
-use FindBin;
-use lib "$FindBin::Bin/../../../lib/perl";
-use lib "$ENV{HOME}/lib/perl";
-
+use Fcntl;
 use Getopt::Long;
 use Pod::Usage;
 
-use NF::FileUtil qw(:all);
-
-my %opt = ( bin => 0,
-            rec => 0,
-            fol => 0,
-            max => undef,
+my %opt = ( bin       => 0,
+            rec       => 0,
+            follow    => 0,
+            depth_max => undef,
+            align     => 1,
           );
 
 my %tbl;
 my %writable;
-my $maxlen = 0;
+my $maxwidth = 0;
+my $prefix   = 0;
+
+sub min { my $m = shift; map { $m = $_ if $_ < $m } @_; $m }
+sub max { my $m = shift; map { $m = $_ if $_ > $m } @_; $m }
+
+sub contents
+{
+  my $file = shift;
+  my $max  = 4096;
+
+  # File must exist, be readable, and be no more than 4k.
+  # The last is to skip entries that may be memory mappings.
+  return unless -f $file && -r _ && -s _ <= $max;
+  my @st = stat _;
+
+  # we don't care about unreadable files or other permission problems
+  open (my $fh, $file) or return;
+  # avoid hanging on files that never return data
+  fcntl( $fh, F_SETFL, (O_NONBLOCK | fcntl( $fh, F_GETFL, 0 )));
+
+  local $_;
+  my $offset = sysread( $fh, $_, $max );
+  return unless defined $offset; # assume EAGAIN
+
+  while ($offset < $max)
+    {
+      my $rsz = sysread( $fh, $_, $max - $offset, $offset );
+      last if !defined( $rsz ) || $rsz <= 0;
+      $offset += $rsz;
+    }
+
+  # 0x09=TAB, 0x10=LFD, 0x13=RET
+  return if !$opt{bin} && /[\x00-\x08\x11-\x12\x14-\x1f\x7f-\xff]/;
+
+  # Test owner write bit.  Don't use -w because we don't
+  # care if current user can write, only that root can.
+  $writable{$file} = $st[2] & 0200;  # 2==st_mode
+
+  $tbl{$file} = $_;
+  my $l = length $file;
+  $maxwidth = $l if $l > $maxwidth;
+}
+
+sub dirents
+{
+  opendir( my $fh, $_[0] ) or return;
+  return grep { !/^\.\.?$/ } readdir( $fh );
+}
+
+sub walk_dirtree
+{
+  my ($node, $fn, $_state) = @_;
+
+  return &$fn( $node ) unless -d $node;
+  my @files = dirents( $node ) or return;
+
+  $node =~ s=/+$==;
+  $_state = { _depth_cur => 0 } unless defined $_state;
+  for my $ent (@files)
+    {
+      my $file = join( '/', $node, $ent );
+      my @st   = stat $file;
+
+      unless (-d _)
+        {
+          walk_dirtree( $file, $fn, $_state );
+          next;
+        }
+
+      next if defined $opt{depth_max} && $_state->{_depth_cur} >= $opt{depth_max};
+      next if !$opt{follow} && -l $file; # have stat in _, now need lstat
+
+      my $key = "$st[0]:$st[1]";       # st_dev, st_ino
+      next if exists $_state->{$key};  # loop detected
+      $_state->{$key} = undef;
+
+      $_state->{_depth_cur}++;
+      walk_dirtree ($file, $fn, $_state);
+      $_state->{_depth_cur}--;
+    }
+}
+
+sub find_longest_common_prefix
+{
+  my $maxdirs = $maxwidth;
+
+  my @prev;
+  my $count = 0;
+  while (my $key = each %tbl)
+    {
+      my @next  = split( m/\//, $key, $maxdirs + 1 );
+      if (@prev)
+        {
+          # We don't need to search deeper than the already currently known deepest
+          $maxdirs = min( $maxdirs, scalar @prev, scalar @next );
+          my $shared = 0;
+          for (my $i = 0; $i < $maxdirs; $i++)
+            {
+              last unless $next[$i] eq $prev[$i];
+              $shared++;
+            }
+          $maxdirs = $shared if $shared < $maxdirs;
+          last if $maxdirs == 0;
+        }
+      @prev = @next;
+      $count++;
+    }
+  return unless $maxdirs;
+  $maxdirs = min( $maxdirs, scalar @prev - 1) if $count < 2;
+  $prefix = length( join('/', @prev[0..$maxdirs-1]) );
+  $maxwidth -= $prefix;
+}
 
 sub parse_options
 {
@@ -34,80 +142,181 @@ sub parse_options
   my $parser = Getopt::Long::Parser->new;
   $parser->configure (qw(bundling autoabbrev no_ignore_case));
   my $succ = $parser->getoptions
-    ( "h|?|help+"        => \$help,
+    ( 'h|?|help+'        =>      \$help,
 
-      "a|text!"          => \$opt{bin},  # like grep switch
-      "r|recursive!"     => \$opt{rec},
-      "L|follow-links"   => \$opt{fol},
-      "m|max-depth=i"    => \$opt{max},
+      'b|binary!'        =>      \$opt{bin},
+      'B'                => sub { $opt{bin}    = 0 },
+
+      'c|align-columns!' =>      \$opt{align},
+      'C'                => sub { $opt{align}  = 0 },
+
+      'L|follow-links!'  =>      \$opt{follow},
+      'H' =>             => sub { $opt{follow} = 0 },
+
+      'r|recursion!'     =>      \$opt{rec},
+      'R'                => sub { $opt{rec}    = 0 },
+
+      's|shorten!'       =>      \$opt{short},
+      'S'                => sub { $opt{short}  = 0 },
+
+      'm|max-depth=i'    =>      \$opt{depth_max},
     );
 
   pod2usage (-exitstatus => 1, -verbose => 0)     unless $succ;
   pod2usage (-exitstatus => 0, -verbose => $help) if $help >= 0;
-}
 
-sub contents
-{
-  my ($filename) = @_;
-
-  return unless -f $filename;
-  return unless -r _;     # _ reuses last stat call
-  my $size    = -s _;
-  return if $size > 4096; # skip entries that may be memory mappings
-
-  # Test owner write bit.  Don't use -w because we aren't interested if the
-  # current user can write to it, only that the owner (usually root) cat.
-  my @st = stat _;
-  $writable{$filename} = $st[2] & 0200;
-
-  # we don't care about unreadable files or other permission problems
-  open (my $fh, $filename) or return;
-  # Avoid hanging on files that never return data
-  set_blocking_mode (0, $fh);
-
-  local $_;
-  my $offset = sysread ($fh, $_, 4096);
-  return unless defined $offset; # assume EAGAIN
-
-  my $total = $offset;
-  my $max   = 2^20; # 1MiB
-  while ($total < $max)
-    {
-      my $rsz = sysread ($fh, $_, $max - $total, $total);
-      last if !defined $rsz || $rsz <= 0;
-      $total += $rsz;
-    }
-
-  # 0x09=TAB, 0x10=LFD, 0x13=RET
-  return if !$opt{bin} && /[\x00-\x08\x11-\x12\x14-\x1f\x7f-\xff]/;
-
-  $tbl{$filename} = $_;
-  my $l = length $filename;
-  $maxlen = $l if $l > $maxlen;
+  # print any files in directories given on cmdline, but no further.
+  $opt{depth_max} = 0 unless $opt{rec} || defined( $opt{depth_max} );
 }
 
 sub main
 {
   parse_options (\@_);
 
-  push @_, directory_files (".") unless @_;
-  if ($opt{rec})
-    {
-      map { grind_over_tree ($_, \&contents, undef, $opt{fol}, { depth_max => $opt{max}}) } @_;
-    }
-  else
-    {
-      map { contents ($_) } @_;
-    }
+  push @_, dirents( '.' ) unless @_;
+  map { walk_dirtree( $_, \&contents ) } @_;
 
-  my $fmt = sprintf ("%%-%ds %%s %%s\n", $maxlen);
-  map { my $file = $_;
-        my $rw = $writable{$file} ? '=' : ':';
-        map { printf $fmt, $file, $rw, $_;
-            } split (/\n+/, $tbl{$file});
+  find_longest_common_prefix() if $opt{short};
+  $maxwidth = 0 unless $opt{align};
+  my $fmt = sprintf ("%%-%ds %%s %%s\n", $maxwidth);
+  map { my $key  = $_;
+        my $path = $prefix? substr( $key, $prefix+1 ) : $key;
+        my $rw = $writable{$key} ? '=' : ':';
+        map { printf $fmt, $path, $rw, $_ } split (/\n+/, $tbl{$key});
       } sort keys %tbl;
 }
 
 main (@ARGV);
 
-# eof
+__END__
+
+
+=begin text
+
+=encoding utf8
+
+=end text
+
+=head1 NAME
+
+syscat - safely display pseudo-file contents under e.g. /proc or /sys
+
+=head1 SYNOPSIS
+
+      {-b|--binary}               {-c|--align-columns}
+      {-B|--no-binary}            {-C|--no-align-columns}
+
+      {-r|--recursion}            {-L|--follow-links}
+      {-R|--no-recursion}         {-H|--no-follow-links}
+
+      {-s|--shorten}              {-m|--max-depth DEPTH}
+      {-S|--no-shorten}
+
+      /sys/foo/... {/sys/bar/... {...}}
+
+ The -h option may be repeated up to 3 times for increased verbosity.
+
+=head1 OPTIONS
+
+=over 4
+
+=item B<-h>, B<--help>
+
+Usage information.
+May be repeated 1-3 times for more verbosity.
+
+=item B<-b>, B<--binary>	                         (default: disabled)
+
+Ordinarily, any file whose content appears to contain non-text data is skipped.
+This option will force reading those files anyway, as long as they are
+still smaller than 4KiB.
+
+=item B<-c>, B<--align-columns>                          (default: enabled)
+
+Align the file path and values so that the latter are on the same column
+for all lines.
+Since some paths might be very long, this may put all values at some
+considerable horizontal distance.
+However, this makes sorting or filtering easier, and works on displays with
+horizontal scrolling.
+Further, the width of the table can be reduced with the B<--shorten> option.
+
+This behavior is enabled by default but can be disabled with B<--no-align-columns>.
+
+=item B<-s>, B<--shorten>                                (default: disabled)
+
+Reduce the width of output by stripping the longest parent directory path
+in common for all selected entries.
+
+=item B<-r>, B<--recursion>                              (default: disabled)
+
+Descend recursively through the filesystem hierarchy of any directories
+given on the command line.
+
+=item B<-L>, B<--follow-links>                           (default: disabled)
+
+By default, when B<--recursion> is enabled, symbolic links are not followed
+when they point to directories.  This option enables traversal across
+symbolic links.
+
+This option is safe against any infinite loops created by symbolic links.
+Every directory will only be traversed once, even if they are encountered
+through non-circular means (e.g. two unrelated directories refer to some
+shared subtree).
+
+This option has no effect unless B<--recursion> is specified.
+
+Any directories specified directly on the command line will display all of
+the non-directory entries in that directory, even if the command line path
+itself is a symbolic link and even if recursion is not enabled.
+
+=item B<-m>, B<--max-depth>=I<DEPTH>
+
+Descend no more than this many directory levels deeper from any starting
+point on the command line.  This option has no effect unless B<--recursion>
+is also specified.
+
+=back
+
+=head1 DESCRIPTION
+
+This script attempts to read files and display their contents,
+skipping any files that can't be read (for whatever reason),
+that appear to contain non-text data,
+or that are larger than 4KiB.
+The last is an arbitrary cutoff point but was chosen because the intended
+set of files for this script are those under F</sys> or F</proc>,
+and textual entries are usually much smaller than this.
+
+Values for which the kernel permits runtime modification are prefixed with C<=>.
+(Mnemonic: values can be assigned.)
+
+Values which cannot be changed at runtime are prefixed with C<:>.
+
+If a file contains multiple lines of text, the name of the file will be
+prepended to each line of output for that file.
+
+=head1 EXAMPLE
+
+    $ syscat -L -r -m 1 -s /sys/class/graphics
+    fb0/bits_per_pixel  = 32
+    fb0/dev             : 29:0
+    fb0/modes           = U:3840x2160p-0
+    fb0/name            : i915drmfb
+    fb0/pan             = 0,0
+    fb0/rotate          = 0
+    fb0/state           = 0
+    fb0/stride          : 15360
+    fb0/uevent          = MAJOR=29
+    fb0/uevent          = MINOR=0
+    fb0/uevent          = DEVNAME=fb0
+    fb0/virtual_size    = 3840,2160
+    fbcon/cursor_blink  = 0
+    fbcon/rotate        = 0
+    $
+
+Observe that the F<uevent> file contained 3 lines,
+and that the F<fb0/dev>, F<fb0/name>, and F<fb0/stride>
+files cannot be modified.
+
+=cut
