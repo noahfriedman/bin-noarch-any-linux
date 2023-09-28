@@ -36,10 +36,9 @@ sub contents
   return unless -f $file && -r _ && -s _ <= $max;
   my @st = stat _;
 
-  # we don't care about unreadable files or other permission problems
-  open (my $fh, $file) or return;
-  # avoid hanging on files that never return data
-  fcntl( $fh, F_SETFL, (O_NONBLOCK | fcntl( $fh, F_GETFL, 0 )));
+  # we don't care about unreadable files or other permission problems.
+  # avoid hanging on read if no data is available immediately.
+  sysopen( my $fh, $file, O_RDONLY | O_NONBLOCK ) or return;
 
   local $_;
   my $offset = sysread( $fh, $_, $max );
@@ -53,6 +52,7 @@ sub contents
     }
 
   # 0x09=TAB, 0x10=LFD, 0x13=RET
+  # any other ctrl chars, or 8-bit chars, are "binary"
   return if !$opt{bin} && /[\x00-\x08\x11-\x12\x14-\x1f\x7f-\xff]/;
 
   # Test owner write bit.  Don't use -w because we don't
@@ -287,6 +287,10 @@ or that are larger than 4KiB.
 The last is an arbitrary cutoff point but was chosen because the intended
 set of files for this script are those under F</sys> or F</proc>,
 and textual entries are usually much smaller than this.
+
+Some files under F</sys> will just block indefinitely if you try to read
+from them with ordinary shell commands, halting any progress or output.
+This program will detect and skip those cases.
 
 Values for which the kernel permits runtime modification are prefixed with C<=>.
 (Mnemonic: values can be assigned.)
