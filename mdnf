@@ -89,7 +89,10 @@ def _my_search( self, args ):
         # corresponding repo one.
         ukey = pkg.name + pkg.version + pkg.release + pkg.arch
         if pkg.reponame == '@System':
-            shown_reponame = '*' + pkg.from_repo
+            if pkg.from_repo[0] == '@': # seen in f24
+                shown_reponame = '*' + pkg.from_repo[1:]
+            else:
+                shown_reponame = '*' + pkg.from_repo
         else:
             shown_reponame = ' ' + pkg.reponame
 
@@ -130,21 +133,25 @@ from dnf.cli.commands.search import SearchCommand
 SearchCommand._search = _my_search
 
 
-# Filter /usr/lib/.build-id files out of "repoquery --list" commands
-from dnf.cli.commands.repoquery import PackageWrapper
-from dnf.i18n import ucd
+try:
+    # Filter /usr/lib/.build-id files out of "repoquery --list" commands
+    # If this import fails, we probably don't have .build-id files anyway.
+    from dnf.cli.commands.repoquery import PackageWrapper
+    from dnf.i18n import ucd
 
-def _files( self ):
-    nfiles = []
-    prefix = '/usr/lib/.build-id'
-    minlen = len( prefix )
-    for f in self._pkg.files:
-        if not (len( f ) >= minlen and f[ 0:minlen ] == prefix):
-            nfiles.append( f )
-    # mimic PackageWrapper.__getattr__
-    return '\n'.join( sorted( { ucd( elt ) for elt in nfiles } ))
+    def _files( self ):
+        nfiles = []
+        prefix = '/usr/lib/.build-id'
+        minlen = len( prefix )
+        for f in self._pkg.files:
+            if not (len( f ) >= minlen and f[ 0:minlen ] == prefix):
+                nfiles.append( f )
+        # mimic PackageWrapper.__getattr__
+        return '\n'.join( sorted( { ucd( elt ) for elt in nfiles } ))
 
-PackageWrapper.files = property( lambda self: _files( self ) )
+    PackageWrapper.files = property( lambda self: _files( self ) )
+except ImportError:
+    pass
 
 
 # TODO: this still needs some work to be reusable in an interactive
