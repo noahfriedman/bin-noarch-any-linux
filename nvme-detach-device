@@ -1,0 +1,27 @@
+#!/bin/sh
+
+main()
+{
+    case $# in
+        0 ) echo "Usage: ${0##*/} /dev/<device> ..." 1>&2
+            exit 1 ;;
+    esac
+
+    for dev in "$@"; do
+        dev=${dev#/dev/}
+        dev=${dev%p*}
+
+        remove=/sys/block/$dev/device/device/remove
+        if [ -f $remove ]; then
+            echo Detaching /dev/$dev
+            echo 1 > $remove
+        else
+            echo "sysfs path for $dev not found" 1>&2
+            exit 1
+        fi
+    done
+}
+
+main "$@"
+
+# eof
