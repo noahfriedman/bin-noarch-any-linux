@@ -1,16 +1,23 @@
 #!/bin/sh
-# $Id: firefox,v 1.11 2017/09/01 01:48:57 friedman Exp $
+
+# 2023-10-16
+# Setting this to 0 stops firefox from spraying a firehose of glib errors
+# to stderr, as a consequence of DBus messages to nonexistent services.
+# See a11y::PreInit() in firefox/accessible/atk/Platform.cpp.
+#
+# If firefox continues to spew in the future because of other DBus traffic,
+# consider just unsetting DBUS_SESSION_BUS_ADDRESS.  But as of right now,
+# this was the only thing that seemed to be mishandled.
+export GNOME_ACCESSIBILITY=0
 
 prog=`run-next -p "$0"`
 ffox() { exec run-misc.sh "$prog" "$@"; }
 
 case $* in *-ProfileManager* ) ffox -no-remote "$@" ;; esac
 
-version=`ffox --version | sed -e 's/.* \([0-9][0-9]*\)\..*/\1/'`
-if [ $version -ge 57 ];
-then profile=ffoxq
-else profile=firefox
-fi
+# The profile name 'ffoxq' was based on firefox 57's "quantum" release,
+# which was a flag day breaking any extension relying on XUL.
+profile=ffoxq
 
 numscreens=`xdpyinfo | sed -n -e '/^number of screens: */s///p'`
 case $numscreens$DISPLAY in
