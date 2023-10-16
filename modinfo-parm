@@ -1,0 +1,13 @@
+#!/bin/sh
+
+if [ $# -gt 1 ]; then
+    for kmod in "$@"; do
+        fn=`modinfo --field filename "$kmod"`
+        fn=${fn##*/}
+        fn=${fn%.ko.*}
+        modinfo --field parm "$kmod" | sed "s/^/$fn./"
+    done
+else
+    modinfo -p "$1"
+fi  | sort | column -t -l2 -s':'       -o' : '
+#fi | sort | fmtcols   -n2 -s'\s*:\s*' -S' : '
