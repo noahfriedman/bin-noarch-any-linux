@@ -1,0 +1,38 @@
+#!/bin/sh
+# with-origin-libpath -- twiddle library path discreetly
+# Author: Noah Friedman <friedman@splode.com>
+# Created: 2023-10-16
+# Public domain.
+
+# Commentary:
+
+# Instruct the dynamic loader to look for shared libraries in ../lib{64}
+# relative to the executable's own location on disk, without exporting that
+# additional path into the executable's runtime environment where it would
+# be inherited by any subprocesses.
+#
+# Also mimics bash's "exec -a" argv[0] feature.
+
+# Code:
+
+argv0=
+case $1 in
+    -a ) argv0=$2 ; shift; shift ;;
+esac
+
+: ${LDSO:=ld.so}
+if $LDSO --verify "$1"; then
+    if [ -n "$argv0" ]; then
+        set : --argv0 "$argv0" "$@"
+        shift
+    fi
+
+    libpath='$ORIGIN/../$LIB'${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
+    exec $LDSO --library-path "$libpath" "$@"
+else
+    echo "${0##*/}: $1: cannot execute." 1>&2
+    ${LDD:=ldd} "$1"
+    exit 1
+fi
+
+# eof
