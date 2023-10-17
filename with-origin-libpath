@@ -20,18 +20,30 @@ case $1 in
     -a ) argv0=$2 ; shift; shift ;;
 esac
 
+exe=$1
+case $exe in
+    */* ) shift ;;
+    *   ) exe=$(type -p "$1")
+          if [ -z "$exe" ]; then
+              echo "${0##*/}: $1: command not found" 1>&2
+              exit 127
+          else
+              shift
+          fi ;;
+esac
+
 : ${LDSO:=ld.so}
-if $LDSO --verify "$1"; then
+if $LDSO --verify "$exe"; then
     if [ -n "$argv0" ]; then
         set : --argv0 "$argv0" "$@"
         shift
     fi
 
     libpath='$ORIGIN/../$LIB'${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
-    exec $LDSO --library-path "$libpath" "$@"
+    exec $LDSO --library-path "$libpath" "$exe" "$@"
 else
-    echo "${0##*/}: $1: cannot execute." 1>&2
-    ${LDD:=ldd} "$1"
+    echo "${0##*/}: $exe: cannot execute." 1>&2
+    ${LDD:=ldd} "$exe"
     exit 1
 fi
 
