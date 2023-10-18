@@ -89,10 +89,13 @@ def _my_search( self, args ):
         # corresponding repo one.
         ukey = pkg.name + pkg.version + pkg.release + pkg.arch
         if pkg.reponame == '@System':
-            if pkg.from_repo[0] == '@': # seen in f24
-                shown_reponame = '*' + pkg.from_repo[1:]
+            if pkg.from_repo:
+                if pkg.from_repo[0] == '@': # seen in f24
+                    shown_reponame = '*' + pkg.from_repo[1:]
+                else:
+                    shown_reponame = '*' + pkg.from_repo
             else:
-                shown_reponame = '*' + pkg.from_repo
+                shown_reponame = '*System'
         else:
             shown_reponame = ' ' + pkg.reponame
 
