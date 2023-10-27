@@ -36,9 +36,9 @@
 # tap/tun interfaces and then run a userspace program to shuttle packets
 # between them.
 
-# If you have no bridge interface set up already, make sure you have brctl
-# (from the bridge-utils distribution) installed.  On Fedora/RedHat/CentOS,
-# you can create a file in /etc/sysconfig/network-scripts/ifcfg-simhbr0 with:
+# If you have no bridge interface set up already, you need to create one.
+# On Fedora/RedHat/CentOS, you can create the file
+# /etc/sysconfig/network-scripts/ifcfg-simhbr0 with contents:
 #
 #	DEVICE=simhbr0
 #	TYPE=Bridge
@@ -178,7 +178,7 @@ net_setup()
     fi
 
     ip link add $veth0 type veth peer name $veth1
-    brctl addif $bridge $veth0
+    ip link set dev $veth0 master $bridge
 
     ip link set $veth0 up
     ip link set $veth1 up
