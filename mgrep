@@ -17,6 +17,7 @@ options=(
     --exclude-dir=.git
     --exclude-dir=.hg
     --exclude-dir=.svn
+    --exclude-dir=__pycache__
 
     #--color=auto
 )
