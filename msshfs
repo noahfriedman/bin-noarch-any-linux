@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+# msshfs --- sshfs wrapper for command line convenience
+# Author: Noah Friedman <friedman@splode.com>
+# Created: 2024-06-02
+# Public domain.
+
+sshfsopts=(
+    -o allow_root
+    -o reconnect
+    -o transform_symlinks
+)
+
+main()
+{
+    case $# in
+        0 ) echo "Usage: ${0##*/} [user@]target:/path [mountPoint] [options] [-- [FUSE Mount Options]]" 1>&2
+            exit 1 ;;
+    esac
+
+    target=$1
+    shift
+
+    case $target in
+        *: | *:* ) : ;;
+        * ) case $target in
+                root@* ) target=$target:/ ;;
+                *      ) target=$target:  ;;
+            esac ;;
+    esac
+
+    case $1 in
+        -* | '' )
+            dst=$target
+            dst=${dst#*@}   # strip user
+            dst=${dst%%:*}  # strip path
+            dst=${dst%%.*}  # strip domain
+            mountpoint=$dst
+            ;;
+        * )
+            mountpoint=$1
+            shift
+            ;;
+    esac
+
+    mkdir -p "$mountpoint" || exit $?
+
+    set -x
+    exec "${SSHFS:-sshfs}" "$target" "$mountpoint" "${sshfsopts[@]}" "$@"
+}
+
+main "$@"
+
+# eof
