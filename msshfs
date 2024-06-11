@@ -23,8 +23,8 @@ main()
     case $target in
         *: | *:* ) : ;;
         * ) case $target in
-                root@* ) target=$target:/ ;;
-                *      ) target=$target:  ;;
+                root@* | toor@* ) target=$target:/ ;;
+                *               ) target=$target:  ;;
             esac ;;
     esac
 
