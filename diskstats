@@ -4,38 +4,36 @@
 # Created: 2010-01-18
 # Public domain
 
-# $Id$
-
 # Commentary:
-
-# Delay is hardcoded to 1s for now since the results are not presently
-# averaged over the time interval.
-
 # Code:
 
-$^W = 1; # enable warnings
-
 use strict;
-use Symbol;
+use warnings qw(all);
 
-my $delay = 1;
+use Getopt::Long;
+use Pod::Usage;
+
+(my $progname = $0) =~ s=.*/==;
+
+my %opt = ( sleep => 1,
+            count => undef,
+          );
 
 sub xopen
 {
   my $file = shift;
-  my $fh = gensym;
-  open ($fh, $file) || die "$file: $!";
+  open( my $fh, $file ) or die "$file: $!";
   return $fh;
 }
 
 sub collect
 {
-  my ($fh) = shift;
+  my $fh = shift;
   my %want = map { $_ => undef } @_;
   my %dev;
   local $_;
 
-  seek ($fh, 0, 0);
+  seek( $fh, 0, 0 );
   while (<$fh>)
     {
       chomp;
@@ -47,8 +45,8 @@ sub collect
   return \%dev;
 }
 
-# The /proc/diskstats file displays the I/O statistics of block
-# devices. Each line contains the following 14 fields:
+# The /proc/diskstats file displays the I/O statistics of block devices.
+# Each line contains the following fields, times are in msec:
 #
 #	 0 - major number
 #	 1 - minor mumber
@@ -56,20 +54,23 @@ sub collect
 #	 3 - reads completed succesfully
 #	 4 - reads merged
 #	 5 - sectors read
-#	 6 - time spent reading (ms)  (cumulative for each read)
+#	 6 - time spent reading  (cumulative for each read)
 #	 7 - writes completed
 #	 8 - writes merged
 #	 9 - sectors written
 #	10 - time spent writing (ms)
 #	11 - I/Os currently in progress
-#
-#		The only field that should go to zero. Incremented as
-#		requests are given to appropriate struct request_queue and
-#		decremented as they finish.
-#
 #	12 - time spent doing I/Os (ms)
 #	13 - weighted time spent doing I/Os (ms)
+#	14 - discards completed successfully		; kernel 4.18+
+#	15 - discards merged
+#	16 - sectors discarded
+#	17 - time spent discarding (ms)
+# 	18 - flush requests completed successfully	; kernel 5.5+
+# 	19 - time spent flushing (ms)
 #
+# See kernel/Documentation/ABI/testing/procfs-diskstats
+#     kernel/Documentation/admin-guide/iostats.rst
 sub delta
 {
   my ($old, $new) = @_;
@@ -102,19 +103,27 @@ sub delta
 my @field_data =
   ( 'Dev'    => { idx =>  2,  width => -9 },
 
-    '#Rd'    => { idx =>  3,  width =>  7 },
+    '#Rd'    => { idx =>  3,  width =>  5 },
 #   '#Rmerg' => { idx =>  4,  width =>  7 },
-    'Rsect'  => { idx =>  5,  width =>  7 },
+    'Rsect'  => { idx =>  5,  width =>  8 },
     'Rms'    => { idx =>  6,  width =>  5 },
 
-    '#Wr'    => { idx =>  7,  width =>  7 },
+    '#Wr'    => { idx =>  7,  width =>  5 },
 #   '#Wmerg' => { idx =>  8,  width =>  7 },
-    'Wsect'  => { idx =>  9,  width =>  7 },
+    'Wsect'  => { idx =>  9,  width =>  8 },
     'Wms'    => { idx => 10,  width =>  5 },
 
-#   '#IO'    => { idx => 11,  width =>  7 },
-#   'IOms'   => { idx => 12,  width =>  5 },
-    'IOms'   => { idx => 13,  width =>  5 },
+    '#IO'    => { idx => 11,  width =>  5 },
+    'IOms'   => { idx => 12,  width =>  5 },
+    'wIOms'  => { idx => 13,  width =>  5 },
+
+    '#Dscd'  => { idx => 14,  width =>  5 },
+#   '#Dmerg' => { idx => 15,  width =>  7 },
+    '#Dsect' => { idx => 16,  width =>  8 },
+    '#Dms'   => { idx => 17,  width =>  5 },
+
+    '#Flush' => { idx => 18,  width =>  5 },
+    '#Fms'   => { idx => 19,  width =>  5 },
   );
 
 
@@ -145,7 +154,7 @@ sub output
 
   unless ($fmt)
     {
-      my @fmtinfo = make_fmt_data;
+      my @fmtinfo = make_fmt_data();
       $fmt = $fmtinfo[0];
       @header = @{$fmtinfo[1]};
       @fields = @{$fmtinfo[2]};
@@ -154,33 +163,60 @@ sub output
   my @keys = sort keys %$data;
   if (@keys > 1)
     {
-      printf ($fmt, @header);
-      map { printf ($fmt, @{$data->{$_}}[@fields])
-          } @keys;
+      printf( $fmt, @header );
+      map { printf( $fmt, @{$data->{$_}}[@fields] ) } @keys;
       print "\n";
     }
   else
     {
-      if ($linecount % $height == 0)
-        {
-          printf ($fmt, @header);
-        }
-      map { printf ($fmt, @{$data->{$_}}[@fields]) } @keys;
+      printf( $fmt, @header ) if ($linecount % $height == 0);
+      map { printf( $fmt, @{$data->{$_}}[@fields] ) } @keys;
       $linecount++;
     }
 }
 
+sub parse_options
+{
+  local *ARGV = \@{$_[0]}; # modify our local arglist, not real ARGV.
+  my $help = 0;
+
+  my $parser = Getopt::Long::Parser->new;
+  $parser->configure( qw(bundling autoabbrev) );
+  my $succ = $parser->getoptions
+    ( 'h|help+'              => \$help,
+      'usage'                => sub { $help = 1 },
+
+      "c|count=i"            => \$opt{count},
+      "s|sleep|interval=i"   => \$opt{sleep},
+    );
+
+  pod2usage( -exitstatus => 1, -verbose => 0 )         unless $succ;
+  pod2usage( -exitstatus => 0, -verbose => $help - 1 ) if $help > 0;
+
+  $opt{count} = 1 if defined( $opt{count} ) && $opt{count} < 1;
+}
+
 sub main
 {
-  my $fh = xopen ("/proc/diskstats");
+  ($progname = $0) =~ s=.*/==;
+  parse_options( \@_ );
 
-  my ($old, $new);
+  my $fh = xopen( '/proc/diskstats' );
+
+  my ($old, $new) = (undef, undef);
+  my $iter = $opt{count};
   while (1)
     {
-      $new = collect ($fh, @_);
-      output (delta ($old, $new)) if $old;
+      $new = collect( $fh, @_ );
+      if ($old)
+        {
+          output( delta( $old, $new ));
+          last if defined( $iter ) && --$iter == 0;
+          sleep( $opt{sleep} );
+        }
+      else
+        { sleep( 1 ) }
       $old = $new;
-      sleep ($delay);
     }
 }
 
