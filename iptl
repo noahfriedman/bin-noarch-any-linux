@@ -55,12 +55,6 @@ table_p()
   esac
 }
 
-ip6tables()
-{
-    # The opt field is always blank and this just messes with formatting.
-    /usr/sbin/ip6tables "$@" | sed -e '/pkts .* opt /s/opt //'
-}
-
 ipt()
 {
   $iptables --table $1     \
