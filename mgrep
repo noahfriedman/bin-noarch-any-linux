@@ -122,6 +122,6 @@ for pat in "${exclude_pats[@]}"; do
     options+=( --exclude="$pat" --exclude="${pat^}" --exclude="${pat^^}" )
 done
 
-exec grep "${options[@]}" "$@"
+exec ${GREP:=grep} "${options[@]}" "$@"
 
 # eof
