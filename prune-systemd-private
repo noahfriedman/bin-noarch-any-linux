@@ -1,0 +1,5 @@
+#!/bin/sh
+
+exec find /tmp/systemd-private-* /var/tmp/systemd-private-* -type d -print -delete
+
+# eof
