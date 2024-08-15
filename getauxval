@@ -250,7 +250,7 @@ sub _format_RAND
   $fh->read( my $buf, 16 )            or return "";
 
   my @vec = unpack( "C*", $buf );
-  return join( " ", map { sprintf( "%#02x", $_ ) } @vec );
+  return join( " ", map { sprintf( "%#04x", $_ ) } @vec );
 }
 
 sub _format_HWCAP
