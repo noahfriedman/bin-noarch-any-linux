@@ -1,5 +1,4 @@
 #!/usr/bin/env perl
-# $Id: mkgrub-menu-fedora.generic,v 1.6 2016/07/27 22:46:33 friedman Exp $
 
 use strict;
 use warnings qw(all);
@@ -11,18 +10,26 @@ my $menu_file  = "/dev/stdout";
 
 my $update_default = 0;
 
-my @options = (qw(sysrq_always_enabled));
+my @options = ( 'intel_iommu=on',
+                #'libata.allow_tpm=1',
+                'sysrq_always_enabled' );
 
 my $tmpl_host = hostnick ();
 my $tmpl_part = sprintf ("(hd0,%d)", bootpart ());
 my $tmpl_root = "/dev/${tmpl_host}_vg0/f%3\$d%4\$s_root";
 
+my $chassis_serial = chassis_serial();
+my $acpi_ovl = $chassis_serial ? "/acpi-$chassis_serial.img" : "";
+
 my $template = "
 	menuentry '%1\$s' {
-	    save_default
-	    if [ -z \"\$root\" ]; then set root='$tmpl_part'; fi
-	    linux    /vmlinuz-%2\$s root=$tmpl_root ro %5\$s
-	    initrd /initramfs-%6\$s.img
+		save_default
+
+		linux	/vmlinuz-%2\$s \\
+			root=$tmpl_root ro \\
+			%5\$s
+
+		initrd	%7\$s/initramfs-%6\$s.img
 	}\n";
 
 my %fsplat = ( x86_64 => 'x64',
@@ -60,6 +67,17 @@ sub hostnick
   my $g;
   $g .= $1 while $h =~ /(?:^|-)(.)/g;
   return $g;
+}
+
+sub chassis_serial
+{
+  my $sysfile = '/sys/class/dmi/id/chassis_serial';
+  return unless -r $sysfile;
+  local $_ = xcat( $sysfile );
+  chomp;
+  return if $_ eq 'None';
+  s/\s+//g;
+  return $_;
 }
 
 sub version_cmp
@@ -104,10 +122,13 @@ sub main
   if (-d "/etc/systemd/sleep.conf.d")
     {
       my $swapdev = swappart();
-      push @options, "resume=$swapdev" if defined $swapdev;
+      unshift @options, "resume=$swapdev" if defined $swapdev;
     }
 
-  my $koptions = join (" ", @options);
+  my $koptions = join (" \\\n\t\t\t", @options);
+  my $preinitrd = (($acpi_ovl && -f $acpi_ovl)
+                   ? sprintf( "%s \\\n\t\t\t", $acpi_ovl)
+                   : "");
   my @kversions = kernel_versions ();
   my $latest;
   for my $version (@kversions)
@@ -117,7 +138,7 @@ sub main
           my $label = sprintf ("Fedora rescue (%s)", $version);
           my $entry = sprintf ($template, $label,
                                $version, 0, "", $koptions,
-                               $version);
+                               $version, $preinitrd);
           $entry =~ s/^\t//gm;
           print $fh $entry;
 
@@ -132,7 +153,7 @@ sub main
 
           my $entry  = sprintf ($template, $label,
                                 $version, $osver, $plat, $koptions,
-                                $version);
+                                $version, $preinitrd);
           $entry =~ s/^\t//gm;
           print $fh $entry;
 
