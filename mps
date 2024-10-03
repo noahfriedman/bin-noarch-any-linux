@@ -21,33 +21,33 @@ my %opt;
 #    2:  h = convert to human-readable units
 #    3:  multiplier (if any) for values before human-scaling
 my @field =
-  ( [qw( user                    0     )],
-    [qw( pid                     1     )],
-    [qw( ppid                    1     )],
-    [qw( pgid                    1     )],
-    [qw( sid                     1     )],
-    [qw( lwp                     1     )],
-    [qw( nlwp=#T                 1     )],
-    [qw( %cpu                    1     )],
-    [qw( %mem                    1     )],
-    [qw( ni                      1     )],
-    [qw( vsz                     1  h  1024 )], # raw is kib
-    [qw( rss                     1  h  1024 )], # raw is kib
-    [qw( drs                     1  h  1024 )], # raw is kib
-    [qw( tty=TTY                 0     )],
-    [qw( wchan:32                0     )],
-    [qw( blocked:64=SIG:BLOCKED  0     )],
-    [qw(  caught:64=SIG:CAUGHT   0     )],
-    [qw( ignored:64=SIG:IGNORE   0     )],
-    [qw( pending:64=SIG:PENDING  0     )],
-    [qw( stat=ST                 0     )],
-    [qw( cpuid=P                 1     )],
-    [qw( stime                   1     )],
-    [qw( lstart=SDATE            0     )],
-    [qw( bsdtime                 1     )],
-    [qw( context                 0     )],
-    [qw( comm:32=LWPNAME         0     )],  # for "mps Hx"
-    [qw( args                    0     )],
+  ( [qw( user                     0     )],
+    [qw( pid                      1     )],
+    [qw( ppid                     1     )],
+    [qw( pgid                     1     )],
+    [qw( sid                      1     )],
+    [qw( lwp                      1     )],
+    [qw( nlwp=#T                  1     )],
+    [qw( %cpu                     1     )],
+    [qw( %mem                     1     )],
+    [qw( ni                       1     )],
+    [qw( vsz                      1  h  1024 )], # raw is kib
+    [qw( rss                      1  h  1024 )], # raw is kib
+    [qw( drs                      1  h  1024 )], # raw is kib
+    [qw( tty=TTY                  0     )],
+    [qw( wchan:32                 0     )],
+    [qw( blocked:256=SIG:BLOCK    0     )],
+    [qw(  caught:256=SIG:CATCH    0     )],
+    [qw( ignored:256=SIG:IGNORE   0     )],
+    [qw( pending:256=SIG:PENDING  0     )],
+    [qw( stat=ST                  0     )],
+    [qw( cpuid=P                  1     )],
+    [qw( stime                    1     )],
+    [qw( lstart=SDATE             0     )],
+    [qw( bsdtime                  1     )],
+    [qw( context                  0     )],
+    [qw( comm:32=LWPNAME          0     )],  # for "mps Hx"
+    [qw( args                     0     )],
   );
 
 sub field_names
@@ -216,8 +216,13 @@ sub parse_options
      'sid'            => \$opt{sid},
      'drs'            => \$opt{drs},
      'lstart'         => \$opt{lstart},
-     'signals|sig'    => \$opt{signals},
-     'signames|nsig'  => sub { $opt{signames} = $opt{signals} = 1 },
+
+     'signames|nsig'  => \$opt{signames},
+     'signals|sig'    => sub { $opt{signals}->{all}     = 1 },
+     'block'          => sub { $opt{signals}->{block}   = 1 },
+     'catch'          => sub { $opt{signals}->{catch}   = 1 },
+     'ignore'         => sub { $opt{signals}->{ignore}  = 1 },
+     'pending'        => sub { $opt{signals}->{pending} = 1 },
     );
 
   pod2usage(-exitstatus => 1, -verbose => 0 )         unless $succ;
@@ -229,7 +234,15 @@ sub parse_options
   delete_field( 'pgid' ) unless $opt{pgid};
   delete_field( 'sid'  ) unless $opt{sid};
   delete_field( 'drs'  ) unless $opt{drs};
-  delete_field( qw( blocked caught ignored pending ) ) unless $opt{signals};
+
+  $opt{signals}->{all} = 1 if $opt{signames} && !defined( $opt{signals} );
+  unless ($opt{signals}->{all})
+    {
+      delete_field( 'blocked' ) unless $opt{signals}->{block};
+      delete_field( 'caught'  ) unless $opt{signals}->{catch};
+      delete_field( 'ignored' ) unless $opt{signals}->{ignore};
+      delete_field( 'pending' ) unless $opt{signals}->{pending};
+    }
 
   # Not checked with getopt because args are not consumed.
   $opt{lwp} = check_option( qr/^[^-]*[Hm]/, [qw(comm lwp wchan)], @ARGV )
