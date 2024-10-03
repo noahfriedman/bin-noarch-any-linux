@@ -21,29 +21,33 @@ my %opt;
 #    2:  h = convert to human-readable units
 #    3:  multiplier (if any) for values before human-scaling
 my @field =
-  ( [qw( user             0   )],
-    [qw( pid              1   )],
-    [qw( ppid             1   )],
-    [qw( pgid             1   )],
-    [qw( sid              1   )],
-    [qw( lwp              1   )],
-    [qw( nlwp=#T          1   )],
-    [qw( %cpu             1   )],
-    [qw( %mem             1   )],
-    [qw( ni               1   )],
-    [qw( vsz              1 h 1024 )], # raw is kib
-    [qw( rss              1 h 1024 )], # raw is kib
-    [qw( drs              1 h 1024 )], # raw is kib
-    [qw( tty=TTY          0   )],
-    [qw( wchan:32         0   )],
-    [qw( stat=ST          0   )],
-    [qw( cpuid=P          1   )],
-    [qw( stime            1   )],
-    [qw( lstart=SDATE     0   )],
-    [qw( bsdtime          1   )],
-    [qw( context          0   )],
-    [qw( comm:32=LWPNAME  0   )],  # for "mps Hx"
-    [qw( args             0   )],
+  ( [qw( user                    0     )],
+    [qw( pid                     1     )],
+    [qw( ppid                    1     )],
+    [qw( pgid                    1     )],
+    [qw( sid                     1     )],
+    [qw( lwp                     1     )],
+    [qw( nlwp=#T                 1     )],
+    [qw( %cpu                    1     )],
+    [qw( %mem                    1     )],
+    [qw( ni                      1     )],
+    [qw( vsz                     1  h  1024 )], # raw is kib
+    [qw( rss                     1  h  1024 )], # raw is kib
+    [qw( drs                     1  h  1024 )], # raw is kib
+    [qw( tty=TTY                 0     )],
+    [qw( wchan:32                0     )],
+    [qw( blocked:64=SIG:BLOCKED  0     )],
+    [qw(  caught:64=SIG:CAUGHT   0     )],
+    [qw( ignored:64=SIG:IGNORE   0     )],
+    [qw( pending:64=SIG:PENDING  0     )],
+    [qw( stat=ST                 0     )],
+    [qw( cpuid=P                 1     )],
+    [qw( stime                   1     )],
+    [qw( lstart=SDATE            0     )],
+    [qw( bsdtime                 1     )],
+    [qw( context                 0     )],
+    [qw( comm:32=LWPNAME         0     )],  # for "mps Hx"
+    [qw( args                    0     )],
   );
 
 sub field_names
@@ -204,14 +208,16 @@ sub parse_options
   my $parser = Getopt::Long::Parser->new;
   $parser->configure( qw(no_auto_abbrev no_ignore_case pass_through) );
   my $succ = $parser->getoptions
-    ('h|help+' => \$help,
-     'usage'   => sub { $help = 1 },
+    ('h|help+'        => \$help,
+     'usage'          => sub { $help = 1 },
 
-     'lwp'     => \$opt{lwp},
-     'pgid'    => \$opt{pgid},
-     'sid'     => \$opt{sid},
-     'drs'     => \$opt{drs},
-     'lstart'  => \$opt{lstart},
+     'lwp'            => \$opt{lwp},
+     'pgid'           => \$opt{pgid},
+     'sid'            => \$opt{sid},
+     'drs'            => \$opt{drs},
+     'lstart'         => \$opt{lstart},
+     'signals|sig'    => \$opt{signals},
+     'signames|nsig'  => sub { $opt{signames} = $opt{signals} = 1 },
     );
 
   pod2usage(-exitstatus => 1, -verbose => 0 )         unless $succ;
@@ -223,6 +229,7 @@ sub parse_options
   delete_field( 'pgid' ) unless $opt{pgid};
   delete_field( 'sid'  ) unless $opt{sid};
   delete_field( 'drs'  ) unless $opt{drs};
+  delete_field( qw( blocked caught ignored pending ) ) unless $opt{signals};
 
   # Not checked with getopt because args are not consumed.
   $opt{lwp} = check_option( qr/^[^-]*[Hm]/, [qw(comm lwp wchan)], @ARGV )
@@ -247,7 +254,8 @@ sub main
   $ENV{PS_FORMAT}      = join( ",", field_names() );
   $ENV{PS_PERSONALITY} = 'posix';
 
-  push    @_, '-A' unless @_;
+  push    @_, '-A'         unless @_;
+  push    @_, '--signames' if $opt{signames};
   unshift @_, 'ps';
 
   open( my $fh, "-|", @_ ) or die "fork: $!\n";
