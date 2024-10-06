@@ -1,0 +1,3 @@
+#!/bin/sh
+export S_TIME_FORMAT=ISO
+exec iostat -dxshz "$@"
