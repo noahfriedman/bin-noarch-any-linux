@@ -33,7 +33,10 @@ main()
             dst=$target
             dst=${dst#*@}   # strip user
             dst=${dst%%:*}  # strip path
-            dst=${dst%%.*}  # strip domain
+            case $dst in
+                [0-9]* ) : ;;
+                *      ) dst=${dst%%.*} ;; # strip domain
+            esac
             mountpoint=$dst
             ;;
         * )
