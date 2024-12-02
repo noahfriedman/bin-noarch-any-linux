@@ -1,0 +1,50 @@
+#!/bin/bash
+# Grep patterns in files that belong to rpm packages
+
+find_args=( -files0-from - -type f )
+grep_args=()
+ rpm_args=( --nodigest --nosignature -ql )
+
+find_args_mode=false
+
+main()
+{
+    while [ $# -gt 0 ]; do
+        if $find_args_mode; then
+            case $1 in
+                -- ) find_args_mode=false ;;
+                *  ) find_args+=( "$1" ) ;;
+            esac
+            shift
+        else
+            case $1 in
+                --find-args )
+                     find_args_mode=true
+                     shift ;;
+
+                -- ) shift
+                     break ;;
+
+                -* ) grep_args+=( "$1" )
+                     shift ;;
+
+                # Eat one non-option arg as regex
+                *  ) grep_args+=( "$1" )
+                     shift
+                     break ;;
+            esac
+        fi
+    done
+
+    case $* in
+        *'*'* ) rpm_args+=( -a ) ;;
+    esac
+
+    ${RPM-rpm} "${rpm_args[@]}" "$@" |
+        ${TR-tr} '\n' '\0' |  # file list with files0-from must be null-separated
+        ${FIND-find} "${find_args[@]}" -exec ${GREP-mgrep} "${grep_args[@]}" {} +
+}
+
+main "$@"
+
+# eof
