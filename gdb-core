@@ -1,0 +1,44 @@
+#!/bin/bash
+
+: ${GDB:=gdb}
+
+execfn()
+{
+    file -b "$1" | sed -ne "/.*, execfn: '\(.*\)',.*/s//\1/p"
+}
+
+main()
+{
+    declare -a gdbargs=()
+
+    for arg in "$@"; do
+        case ${arg##*/} in
+            core* ) core=$arg prog=`execfn "$arg"` ;;
+            *     ) gdbargs+=( "$arg" ) ;;
+        esac
+    done
+
+    case ${core:-notfound} in
+        notfound ) echo "No core file specified?" 1>&2; exit 1 ;;
+    esac
+    case ${prog:-notfound} in
+        notfound ) echo "Could not determine executable corresponding to core" 1>&2; exit 1 ;;
+    esac
+
+    case $prog in
+        */* )
+
+            gdbargs+=( --cd="${prog%/*}" )
+            case $core in
+                /* ) : ;;
+                *  ) core=
+
+;;
+    esac
+
+    exec $GDB "${gdbargs[@]}" "$prog" "$core"
+}
+
+main "$@"
+
+# eof
