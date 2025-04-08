@@ -9,7 +9,7 @@ execfn()
 
 main()
 {
-    declare -a gdbargs=()
+    declare -a gdbargs=( -quiet )
 
     for arg in "$@"; do
         case ${arg##*/} in
@@ -27,13 +27,18 @@ main()
 
     case $prog in
         */* )
-
-            gdbargs+=( --cd="${prog%/*}" )
             case $core in
                 /* ) : ;;
-                *  ) core=
+                *  ) core=$(realpath $PWD/$core) ;;
+            esac
+            # Using --cd won't enable reading in the .gdbinit
+            # file in that directory at startup.
+            #gdbargs+=( --cd="${prog%/*}" )
+            cd "${prog%/*}" ;;
+    esac
 
-;;
+    case ${INSIDE_EMACS:+isset} in
+        isset ) gdbargs+=( --fullname ) ;;
     esac
 
     exec $GDB "${gdbargs[@]}" "$prog" "$core"
