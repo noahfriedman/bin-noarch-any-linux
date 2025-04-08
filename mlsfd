@@ -1,0 +1,27 @@
+#!/bin/sh
+
+: ${LSFD:=lsfd}
+
+columns()
+{
+    set -- $($LSFD --list-columns | sed -e 's/^  *//' -e 's/ .*//')
+    local IFS=,
+    echo "$*"
+}
+
+main()
+{
+    for arg in "$@"; do
+        case $arg in
+            -J | --json )
+                set -- --json --output $(columns) "$@"
+                break ;;
+        esac
+    done
+
+    exec $LSFD --notruncate "$@"
+}
+
+main "$@"
+
+# eof
