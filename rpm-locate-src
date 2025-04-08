@@ -1,0 +1,11 @@
+#!/bin/bash
+
+: ${LOCATE:=nfs-locate}
+
+rpm=${@:$#}
+srpm=`rpm -q --qf '%{SOURCERPM}\n' "$rpm"`
+${LOCATE} "${@:1:$#-1}" "$srpm"
+
+:
+
+# eof
