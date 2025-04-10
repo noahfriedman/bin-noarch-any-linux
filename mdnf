@@ -168,8 +168,8 @@ def mdnf( args=sys.argv, exit_code=False ):
             global column_brevity
             column_brevity = True
             args.pop( 1 )
-        args.insert( 1, '--quiet' )
         if args[1] in ( 'search', 'se' ):
+            args.insert( 1, '--quiet' )
             args.insert( 1, '--cacheonly' )
         main.user_main( args[1:], exit_code=exit_code )
     except KeyboardInterrupt:
