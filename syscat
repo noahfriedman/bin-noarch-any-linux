@@ -7,7 +7,7 @@
 use strict;
 use warnings qw(all);
 
-use Fcntl;
+use Fcntl qw(:DEFAULT :mode);
 use Getopt::Long;
 use Pod::Usage;
 
@@ -57,7 +57,7 @@ sub contents
 
   # Test owner write bit.  Don't use -w because we don't
   # care if current user can write, only that root can.
-  $writable{$file} = $st[2] & 0200;  # 2==st_mode
+  $writable{$file} = $st[2] & S_IWUSR;  # 2==st_mode
 
   $tbl{$file} = $_;
   my $l = length $file;
