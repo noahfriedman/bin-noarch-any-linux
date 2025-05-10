@@ -3,6 +3,8 @@
 queryformat='%{installsize}\t%{name}\t%{version}-%{release}\t%{arch}\t%{buildtime}\t%{reponame}\t%{summary}'
 brief=false
 
+: ${DNF:=dnf}
+
 case $1 in
     -b | --brief | --brevity )
         brief=true
@@ -13,7 +15,7 @@ esac
 case $# in
     0 ) echo ${0##*/}: Specify a repo to list;
         echo
-        dnf repolist --all | egrep -v -- '-(debuginfo|source|src)'
+        $DNF repolist --all #| grep -Ev -- '-debuginfo'
         exit 1 ;;
 esac 1>&2
 
@@ -25,20 +27,20 @@ esac
 
 dnf_args=(
     --quiet
+    ${repo:+"$repo"}
 
     repoquery
     --queryformat "$queryformat"
     --available
     --latest-limit=1
-    ${repo:+"$repo"}
 )
 
 if $brief; then
-    ${DNF-dnf} "${dnf_args[@]}" "$@" |
+    $DNF "${dnf_args[@]}" "$@" |
         sort -k1,1 |
         column -t -s'	'
 else
-    ${DNF-dnf} "${dnf_args[@]}" "$@" |
+    $DNF "${dnf_args[@]}" "$@" |
         sort -k2,2 -k3,3V -k4,4 |
         column -t -s'	' -R1
 fi
