@@ -1,64 +1,143 @@
-#!/bin/bash
-# $Id: mhttpfs,v 1.1 2018/06/20 19:18:56 friedman Exp $
+#!/usr/bin/env bash
 
-apush() { eval "$1=(\"\${$1[@]}\" \"\${@:2}\")"; }
+: ${RCLONE:=rclone}
 
-obscure() { rclone --config /dev/null obscure "$@"; }
+rclone_opts=( --allow-other
+              --allow-non-empty
+              --daemon )
 
-opts=( --config /dev/null
+nconf_opts=( --config          /dev/null
+             #--uid            `id -u nobody || id -u`
+             #--gid            `id -g nobody || id -g`
+             --contimeout      300s
+             --attr-timeout      5s
+             --dir-cache-time    5m
+             #--no-checksum
+             #--no-modtime
+             #--no-seek
+             --read-only )
 
-       --allow-other
-       --allow-non-empty
-       --daemon
 
-       --attr-timeout=5s
-       --dir-cache-time=5m
+obscure() { $RCLONE --config /dev/null obscure "$@"; }
 
-       #--default-permissions
-       --uid=0
-       --gid=0
-       --umask=0
-       --read-only
+is_configured()
+{
+    local name=${1%%:*}:
+    for remote in `$RCLONE listremotes`; do
+        case $remote in
+            $name ) return 0 ;;
+        esac
+    done
+    return 1
+}
 
-       #--no-checksum
-       #--no-modtime
-       #--no-seek
-)
+config_uri()
+{
+    # n.b. these variables are global!
+    proto=${1%%://*}
+    rhost=${1#*://}
+    rhost=${rhost%%/*}
+    path=${1#*://$rhost}
+    user=
+    pass=
 
-while [ $# -gt 0 ]; do
-    case $1 in
-        *://* )
-            proto=${1%%://*}
-            rhost=${1#*://}
-            rhost=${rhost%%/*}
-            path=${1#*://$rhost}
-
-            vhost=${rhost//[-.]/_}
-            uvar=RCLONE_CONFIG_${vhost^^}_URL
-            tvar=RCLONE_CONFIG_${vhost^^}_TYPE
-            export "$uvar=$proto://$rhost" "$tvar=${proto%s}"
-
-            case $proto in
-                ftp )
-                    : ${RCLONE_FTP_HOST:=$rhost}
-                    : ${RCLONE_FTP_USER:=anonymous}
-                    : ${RCLONE_FTP_PASS:=`obscure anonymous`}
-                    export RCLONE_FTP_{HOST,USER,PASS}
-                    ;;
-            esac
-
-            apush opts --contimeout 300s
-            apush opts "$vhost:$path"
+    case $rhost in
+        *:*@* )
+            userpass=${rhost%@*}
+            user=${userpass%%:*}
+            pass=$(obscure "${userpass#*:}")
+            rhost=${rhost##*@}
             ;;
-
-        * )
-            apush opts "$1"
+        *@* )
+            user=${rhost%@*}
+            rhost=${rhost##*@}
             ;;
     esac
 
-    shift
-done
+    vhost=${rhost//[-.]/_}
+    export "RCLONE_CONFIG_${vhost^^}_URL=$proto://$rhost"
+    export "RCLONE_CONFIG_${vhost^^}_TYPE=${proto%s}"
 
-exec rclone mount "${opts[@]}" "$@"
+    case $proto in
+        ftp )
+            : ${RCLONE_FTP_HOST:=$rhost}
+            : ${RCLONE_FTP_USER:=${user:-anonymous}}
+            : ${RCLONE_FTP_PASS:=${pass:-`obscure anonymous`}}
+            export RCLONE_FTP_{HOST,USER,PASS}
+            ;;
+        * )
+            case ${user:+isset} in isset )
+                export "RCLONE_CONFIG_${vhost^^}_USER=$user" ;;
+            esac
+
+            case ${pass:+isset} in isset )
+                export "RCLONE_CONFIG_${vhost^^}_PASS=$pass" ;;
+            esac
+            ;;
+    esac
+
+    target=$vhost:$path
+    opts=( "${nconf_opts[@]}" "${opts[@]}" )
+}
+
+main()
+{
+    declare -a opts=( "${rclone_opts[@]}" )
+
+    target= mntpt=
+    while [ $# -gt 0 ]; do
+        case $1 in
+            *://* ) config_uri "$1" ;;
+            -*    ) opts+=( "$1" ) ;;
+            *:*   ) case $target in '' ) target=$1 ;; esac ;;
+            */*   ) case $mntpt  in '' ) mntpt=$1  ;; esac ;;
+            *     ) case ${target:+isset} in
+                        isset )
+                            case ${mntpt:+isset} in
+                                isset ) opts+=( "$1" ) ;;
+                                *     ) mntpt=$1 ;;
+                            esac ;;
+                        * ) target=$1 ;;
+                    esac ;;
+        esac
+        shift
+    done
+
+    case $target in
+        *:* ) : ;;
+        * ) config_uri http://$target ;;
+    esac
+
+    case $mntpt in
+        '' ) mntpt=${rhost%%:*}
+             mntpt=${mntpt%.*}   # strip tld (.com, .net, etc)
+             case ${mntpt%%.*} in
+                 *ftp* | web | www | *mirror* )
+                     mntpt=${mntpt##*.} ;;  # strip host and subdomains
+                 * ) mntpt=${mntpt%%.*} ;;
+             esac ;;
+    esac
+    mntpt=${mntpt%/}
+    case $mntpt in
+        */* ) : ;;
+        *   ) mntpt=./$mntpt ;;
+    esac
+    test -d "$mntpt" || mkdir -p "$mntpt" || exit $?
+
+    case ${DEBUG:+isset} in
+        isset )
+            env | grep RCLONE | sort
+            (set -x; $RCLONE mount "${opts[@]}" "$target" "$mntpt")
+            ;;
+        * ) $RCLONE mount "${opts[@]}" "$target" "$mntpt"
+            ;;
+    esac
+
+    if [ -t 1 ]; then
+        echo mounted $rhost:$path on $mntpt
+    fi
+}
+
+main "$@"
 
 # eof
