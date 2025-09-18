@@ -48,21 +48,11 @@ getmeminfo()
         0 ) LowTotal=$MemTotal LowFree=$MemFree ;;
     esac
 
-    HighTotal=${HighTotal:-0}
-     HighFree=${HighFree:-0}
+     HighTotal=${HighTotal:-0}
+      HighFree=${HighFree:-0}
 
-    # Derived values
-    MemCached=$((Cached    + SReclaimable))  # Slab_reclaimable
-      MemUsed=$((MemTotal  - MemFree - MemCached - Buffers))
-     SwapUsed=$((SwapTotal - SwapFree))
-      LowUsed=$((LowTotal  - LowFree))
-     HighUsed=$((HighTotal - HighFree))
-
-        Total=$((MemTotal  + SwapTotal))
-    TotalUsed=$((MemUsed   + SwapUsed))
-    TotalFree=$((MemFree   + SwapFree))
-
-    # if $MemAvailable is greater than $MemTotal or our calculation of
+    # MemAvailable field appeared in kernel 3.14.
+    # If $MemAvailable is greater than $MemTotal or our calculation of
     # mem_used overflows, that's symptomatic of running within a lxc container
     # where such values will be dramatically distorted over those of the host.
     if [ ${MemAvailable:-0} -gt ${MemTotal:-0} ]; then
@@ -74,6 +64,7 @@ getmeminfo()
             if [ -f "$minfile" ]; then
                 read MinFree < $minfile
                 # Should be equal to sum of all 'low' fields in /proc/zoneinfo
+                # FIXME: props-ng always used 5/4; why did I use 5/16 in 2017?
                 watermark_low=$((MinFree * 5 / 16))
 
                 MemAvailable=$((MemFree - watermark_low
@@ -85,6 +76,23 @@ getmeminfo()
                 MemAvailable=$MemFree  # kernel 2.6.26 and earlier
             fi ;;
     esac
+
+    # Derived values
+
+     MemCached=$((Cached      + SReclaimable))  # Slab_reclaimable
+    # Older formula doesn't take into account page cache or that not all
+    # reclaimable memory slabs will be reclaimed due to items being in use.
+    # MemAvailable first appeared in linux kernel 3.14.
+    #  MemUsed=$((MemTotal    - MemFree - MemCached - Buffers))
+       MemUsed=$((MemTotal    - MemAvailable))
+      SwapUsed=$((SwapTotal   - SwapFree))
+       LowUsed=$((LowTotal    - LowFree))
+      HighUsed=$((HighTotal   - HighFree))
+    CommitFree=$((CommitLimit - Committed_AS))
+
+         Total=$((MemTotal    + SwapTotal))
+     TotalUsed=$((MemUsed     + SwapUsed))
+     TotalFree=$((MemFree     + SwapFree))
 }
 
 print_old()
@@ -99,17 +107,19 @@ print_old()
       fmt="%-6s$w$w$w\n"
     fmtbc="%-6s$w$w\n"
 
-    mprintf "$fmtw"  ""         total       used       free  buffers  cached
-    mprintf "$fmtw"  Mem:   $MemTotal   $MemUsed   $MemFree $Buffers $Cached
-    case $show_lohi in t )
-    mprintf "$fmt"   Low:   $LowTotal   $LowUsed   $LowFree
-    mprintf "$fmt"   High: $HighTotal  $HighUsed  $HighFree ;;
+    mprintf "$fmtw"  ""                 total       used       free  buffers  cached
+    mprintf "$fmtw"          Mem:   $MemTotal   $MemUsed   $MemFree $Buffers $Cached
+    case $show_lohi in
+        t )
+            mprintf "$fmt"   Low:   $LowTotal   $LowUsed   $LowFree
+            mprintf "$fmt"   High: $HighTotal  $HighUsed  $HighFree ;;
     esac
-    mprintf "$fmtbc" "-/+ buffers/cache:" $MemUNC $MemNCFree
-    mprintf "$fmt"   Swap: $SwapTotal  $SwapUsed  $SwapFree
+    mprintf "$fmtbc" "-/+ buffers/cache:"        $MemUNC $MemNCFree
+    mprintf "$fmt"           Swap: $SwapTotal  $SwapUsed  $SwapFree
 
-    case $show_total in t )
-    mprintf "$fmt"  Total:     $Total $TotalUsed $TotalFree ;;
+    case $show_total in
+        t )
+            mprintf "$fmt"  Total:     $Total $TotalUsed $TotalFree ;;
     esac
 }
 
@@ -118,21 +128,27 @@ print_new()
      fmtw="%-7s$w$w$w$w$w$w$w\n"
       fmt="%-7s$w$w$w\n"
 
-    mprintf "$fmtw"  ""         total       used       free shared  buffers      cache         avail
-    mprintf "$fmtw"  Mem:   $MemTotal   $MemUsed   $MemFree $Shmem $Buffers $MemCached $MemAvailable
+    mprintf "$fmtw"  ""                   total          used        free shared  buffers      cache         avail
+    mprintf "$fmtw"          Mem:     $MemTotal      $MemUsed    $MemFree $Shmem $Buffers $MemCached $MemAvailable
 
-    case $show_lohi in t )
-    mprintf "$fmt"   Low:   $LowTotal   $LowUsed   $LowFree
-    mprintf "$fmt"   High: $HighTotal  $HighUsed  $HighFree ;;
+    case $show_lohi in
+        t )
+            mprintf "$fmt"   Low:     $LowTotal      $LowUsed    $LowFree
+            mprintf "$fmt"   High:   $HighTotal     $HighUsed   $HighFree ;;
     esac
 
     case ${SwapTotal:-0}:$show_total in
         *:t )
-            mprintf "$fmt"   Swap: $SwapTotal  $SwapUsed  $SwapFree
-            mprintf "$fmt"  Total:     $Total $TotalUsed $TotalFree ;;
+            mprintf "$fmt"   Swap:   $SwapTotal     $SwapUsed   $SwapFree
+            mprintf "$fmt"  Total:       $Total    $TotalUsed  $TotalFree ;;
         0:* ) : ;;
         * )
-            mprintf "$fmt"   Swap: $SwapTotal  $SwapUsed  $SwapFree ;;
+            mprintf "$fmt"   Swap:   $SwapTotal     $SwapUsed   $SwapFree ;;
+    esac
+
+    case $committed in
+        t )
+            mprintf "$fmt"   Comm: $CommitLimit $Committed_AS $CommitFree ;;
     esac
 }
 
@@ -267,7 +283,7 @@ main()
     # For android busybox; should be harmless elsewhere
     PATH=/system/xbin/bb:$PATH
 
-    output=new unit= factor=1 mult=1024 w= sigfig=
+    output=new unit= factor=1 mult=1024 w= sigfig= committed=
     while :; do
         case $1 in
             -o | --old    ) output=old ; : ${unit:=k} ${sigfig:=1} ${w:=%12s} ;;
@@ -289,6 +305,8 @@ main()
 
             -s | --sec*   ) repeat_interval=$2 ; shift ;;
             -c | --count  ) repeat_count=$2    ; shift ;;
+
+            -v | --committed ) committed=t ;;
 
             -w | --wide   )
                 w=%12s
