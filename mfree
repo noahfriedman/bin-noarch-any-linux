@@ -78,12 +78,7 @@ getmeminfo()
     esac
 
     # Derived values
-
      MemCached=$((Cached      + SReclaimable))  # Slab_reclaimable
-    # Older formula doesn't take into account page cache or that not all
-    # reclaimable memory slabs will be reclaimed due to items being in use.
-    # MemAvailable first appeared in linux kernel 3.14.
-    #  MemUsed=$((MemTotal    - MemFree - MemCached - Buffers))
        MemUsed=$((MemTotal    - MemAvailable))
       SwapUsed=$((SwapTotal   - SwapFree))
        LowUsed=$((LowTotal    - LowFree))
@@ -306,7 +301,7 @@ main()
             -s | --sec*   ) repeat_interval=$2 ; shift ;;
             -c | --count  ) repeat_count=$2    ; shift ;;
 
-            -v | --committed ) committed=t ;;
+            -v | --commi* ) committed=t ;;
 
             -w | --wide   )
                 w=%12s
