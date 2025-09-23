@@ -1,0 +1,33 @@
+#!/bin/bash
+# 2025-09-23
+# You cannot tell linux man to supplement the default manpath (which is
+# derived from your PATH); you must either set it outright or not use it at
+# all.  So if MANPATH is not set, this fetches the path which man would use
+# and prepends my search directories, and sets MANPATH.
+
+local_paths=(
+    $HOME/lib/man
+)
+
+set_manpath()
+{
+    local mpath=$(manpath)
+    test $? -eq 0 || return 1
+
+    local IFS=":$IFS"
+    MANPATH=${local_paths[*]}:$mpath
+    export MANPATH
+}
+
+main()
+{
+    case ${MANPATH:-notset} in
+        notset ) set_manpath ;;
+    esac
+
+    exec run-next "$0" "$@"
+}
+
+main "$@"
+
+# eof
