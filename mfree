@@ -98,9 +98,9 @@ print_old()
     MemNCFree=$((MemFree + Buffers + Cached))
        MemUNC=$((MemUsed - Buffers - Cached))
 
-     fmtw="%-6s$w$w$w$w$w\n"
-      fmt="%-6s$w$w$w\n"
-    fmtbc="%-6s$w$w\n"
+     fmtw="%-6s $w $w $w $w $w\n"
+      fmt="%-6s $w $w $w\n"
+    fmtbc="%-6s $w $w\n"
 
     mprintf "$fmtw"  ""                 total       used       free  buffers  cached
     mprintf "$fmtw"          Mem:   $MemTotal   $MemUsed   $MemFree $Buffers $Cached
@@ -120,8 +120,8 @@ print_old()
 
 print_new()
 {
-     fmtw="%-7s$w$w$w$w$w$w$w\n"
-      fmt="%-7s$w$w$w\n"
+     fmtw="%-8s $w $w $w $w $w $w $w\n"
+      fmt="%-8s $w $w $w\n"
 
     mprintf "$fmtw"  ""                   total          used        free shared  buffers      cache         avail
     mprintf "$fmtw"          Mem:     $MemTotal      $MemUsed    $MemFree $Shmem $Buffers $MemCached $MemAvailable
@@ -281,39 +281,50 @@ main()
     output=new unit= factor=1 mult=1024 w= sigfig= committed=
     while :; do
         case $1 in
-            -o | --old    ) output=old ; : ${unit:=k} ${sigfig:=1} ${w:=%12s} ;;
-            -n | --new    ) output=new ; : ${unit:=h} ;;
+            --*=* )
+                local arg=$1
+                shift
+                set : "${arg%%=*}" "${arg#*=}" "$@"
+                shift
+                continue ;;
 
-                 --pow2   ) mult=1024 ;;
-                 --si     ) mult=1000 ;;
-            -P | --precis ) sigfig=$2 ; shift ;;
 
-            -h | --human  ) unit=h ;;
-            -b | --bytes  ) unit=b ;;
-            -k | --kilo   ) unit=k ;;
-            -m | --mega   ) unit=m ;;
-            -g | --giga   ) unit=g ;;
-            -p | --peta   ) unit=p ;;
+            -o | --old     ) output=old ; : ${unit:=k} ${sigfig:=1} ${w:=%12s} ;;
+            -n | --new     ) output=new ; : ${unit:=h} ;;
 
-            -l | --lohi   ) show_lohi=t ;;
-            -t | --total  ) show_total=t ;;
+            --bi | --pow2  ) mult=1024 ;;
+            --si | --pow10 ) mult=1000 ;;
+            -P | --preci*  ) sigfig=$2 ; shift ;;
 
-            -s | --sec*   ) repeat_interval=$2 ; shift ;;
-            -c | --count  ) repeat_count=$2    ; shift ;;
+            -h | --human   ) unit=h ;;
+            -b | --bytes   ) unit=b ;;
+            -k | --kilo    ) unit=k ;;
+            -m | --mega    ) unit=m ;;
+            -g | --giga    ) unit=g ;;
+            -p | --peta    ) unit=p ;;
 
-            -v | --commi* ) committed=t ;;
+            -l | --lohi    ) show_lohi=t ;;
+            -t | --total   ) show_total=t ;;
 
-            -w | --wide   )
-                w=%12s
+            -s | --sec*    ) repeat_interval=$2 ; shift ;;
+            -c | --count   ) repeat_count=$2    ; shift ;;
+
+            -v | --commi*  ) committed=t ;;
+
+            -w | --wide )
+                w=%11s
                 case $2 in
                     -[0-9]* | [0-9]* ) w=%${2}s ; shift ;;
                 esac ;;
 
             -- | --* ) break ;;
             -??* )
-                local arg=$1; shift
-                set . `splitopt "${arg#-}"` "$@"
-                shift; continue ;;
+                local arg=$1
+                shift
+                set : `splitopt "${arg#-}"` "$@"
+                shift
+                continue ;;
+
             * ) break ;;
         esac
         shift
@@ -328,7 +339,7 @@ main()
         p ) op=/ factor='$((mult ** 3))' ;;
     esac
 
-    : ${w:=%9s}
+    : ${w:=%11s}
     : ${sigfig:=3}
     minprecis=$(( 10 ** sigfig - 1 ))
     # computed value of factor was delayed in case mult is switched to SI
