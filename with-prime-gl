@@ -2,17 +2,24 @@
 # Offload 3D rendering to nvidia discrete GPU using nvidia driver.
 # n.b. the DRI_PRIME environment variable only works with the nouveau driver.
 
+export  VDPAU_DRIVER=nvidia
+export  LIBVA_DRIVER_NAME=nvidia
+export  NVD_BACKEND=direct
+
 export  __NV_PRIME_RENDER_OFFLOAD=1
 export  __GLX_VENDOR_LIBRARY_NAME=nvidia
 
-export  __VK_LAYER_NV_optimus=NVIDIA_only
-export  VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/nvidia_icd.json
+icd_d=/usr/share/vulkan/icd.d
+export   __VK_LAYER_NV_optimus=NVIDIA_only
+export  VK_ICD_FILENAMES=$icd_d/nvidia_icd.`uname -m`.json:$icd_d/nvidia_icd.json
+
+#export __EGL_VENDOR_LIBRARY_FILENAMES=/usr/share/glvnd/egl_vendor.d/10_nvidia.json
 
 export  __GL_SYNC_TO_VBLANK=0
 #export __GL_YIELD=USLEEP
 
 # for testing
-#export  __GL_SHOW_GRAPHICS_OSD=1
+#export __GL_SHOW_GRAPHICS_OSD=1
 
 exec "$@"
 
