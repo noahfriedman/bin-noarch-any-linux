@@ -4,7 +4,11 @@
 
 execfn()
 {
-    file -b "$1" | sed -ne "/.*, execfn: '\(.*\)',.*/s//\1/p"
+    if type core-execfn >/dev/null 2>&1; then
+        core-execfn "$1"
+    else
+        file -b "$1" | sed -ne "/.*, execfn: '\(.*\)',.*/s//\1/p"
+    fi
 }
 
 main()
